@@ -60,6 +60,7 @@ import qualified Data.Int as DataInt
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Word as Word
+import qualified Codec.Compression.Zlib as Zlib
 import qualified Foreign.Erlang.Pid as Pid
 import qualified Foreign.Erlang.Port as Port
 import qualified Foreign.Erlang.Reference as Reference
@@ -264,7 +265,6 @@ binaryToTerms = do
         | tag == tagSmallBigExt || tag == tagLargeBigExt -> do
             j <- getUnsignedInt8or32 (tag == tagSmallBigExt)
             sign <- Get.getWord8
-            --digits <- sequence $ List.replicate j Get.getWord8
             digits <- replicateM j Get.getWord8
             let f = (\d -> \b -> b * 256 + (fromIntegral . getUnsignedInt8) d)
                 value = List.foldr f (0 :: Integer) digits
@@ -311,13 +311,20 @@ binaryToTerms = do
             value <- Get.getByteString $ getUnsignedInt8 j
             return $ OtpErlangAtomUTF8 value
         | tag == tagCompressedZlib -> do
-            fail (parseError "MISSING")
+            size_uncompressed <- Get.getWord32be
+            compressed <- Get.getRemainingLazyByteString
+            let data_uncompressed = Zlib.decompress $ compressed
+                size1 = fromIntegral $ getUnsignedInt32 size_uncompressed
+                size2 = LazyByteString.length data_uncompressed
+            if size1 /= size2 then
+                fail $ parseError "compression corrupt"
+            else
+                return $ Get.runGet binaryToTerms data_uncompressed
         | otherwise ->
             fail $ parseError "invalid tag"
 
 binaryToTermSequence :: Int -> Get [OtpErlangTerm]
 binaryToTermSequence length = do
-    --value <- sequence (List.replicate length binaryToTerms)
     value <- replicateM length binaryToTerms
     return value
 
