@@ -312,7 +312,7 @@ binaryToTerms = do
             return $ OtpErlangAtom value
         | tag == tagMapExt -> do
             length <- Get.getWord32be
-            pairs <- replicateM (getUnsignedInt32 length) binaryToPair
+            pairs <- replicateM (getUnsignedInt32 length) binaryToMapPair
             return $ OtpErlangMap $ Map.fromList pairs
         | tag == tagFunExt -> do
             length <- Get.lookAhead $ binaryToFunSize
@@ -345,8 +345,8 @@ binaryToTermSequence length = do
     value <- replicateM length binaryToTerms
     return value
 
-binaryToPair :: Get (OtpErlangTerm, OtpErlangTerm)
-binaryToPair = do
+binaryToMapPair :: Get (OtpErlangTerm, OtpErlangTerm)
+binaryToMapPair = do
     key <- binaryToTerms
     value <- binaryToTerms
     return (key, value)
@@ -539,7 +539,7 @@ termsToBinary (OtpErlangList value) =
     else if length <= 4294967295 then do
         Put.putWord8 tagListExt
         Put.putWord32be $ fromIntegral length
-        sequenceToBinary value Builder.empty
+        termSequenceToBinary value Builder.empty
         Put.putWord8 tagNilExt
     else do
         fail $ outputError "uint32 overflow"
@@ -550,7 +550,7 @@ termsToBinary (OtpErlangListImproper value) =
     else if length <= 4294967295 then do
         Put.putWord8 tagListExt
         Put.putWord32be $ fromIntegral (length - 1)
-        sequenceToBinary value Builder.empty
+        termSequenceToBinary value Builder.empty
     else do
         fail $ outputError "uint32 overflow"
 termsToBinary (OtpErlangTuple value) =
@@ -558,11 +558,11 @@ termsToBinary (OtpErlangTuple value) =
     if length <= 255 then do
         Put.putWord8 tagSmallTupleExt
         Put.putWord8 $ fromIntegral length
-        sequenceToBinary value Builder.empty
+        termSequenceToBinary value Builder.empty
     else if length <= 4294967295 then do
         Put.putWord8 tagLargeTupleExt
         Put.putWord32be $ fromIntegral length
-        sequenceToBinary value Builder.empty
+        termSequenceToBinary value Builder.empty
     else do
         fail $ outputError "uint32 overflow"
 termsToBinary (OtpErlangMap value) =
@@ -570,7 +570,7 @@ termsToBinary (OtpErlangMap value) =
     if length <= 4294967295 then do
         Put.putWord8 tagMapExt
         Put.putWord32be $ fromIntegral length
-        mapToBinary value Builder.empty
+        Put.putBuilder $ Map.foldlWithKey mapPairToBinary Builder.empty value
     else do
         fail $ outputError "uint32 overflow"
 termsToBinary (OtpErlangPid (Erlang.Pid nodeTag node id serial creation)) = do
@@ -607,17 +607,13 @@ termsToBinary (OtpErlangFunction (Erlang.Function tag value)) = do
     Put.putWord8 tag
     Put.putBuilder $ Builder.fromByteString value
 
-sequenceToBinary :: [OtpErlangTerm] -> Builder -> Put
-sequenceToBinary [] builder = do
+termSequenceToBinary :: [OtpErlangTerm] -> Builder -> Put
+termSequenceToBinary [] builder = do
     Put.putBuilder builder
-sequenceToBinary (h:t) builder =
+termSequenceToBinary (h:t) builder =
     let binary = Put.runPut $ termsToBinary h in
-    sequenceToBinary t
+    termSequenceToBinary t
         (Builder.append builder (Builder.fromLazyByteString binary))
-
-mapToBinary :: (Map OtpErlangTerm OtpErlangTerm) -> Builder -> Put
-mapToBinary value builder =
-    Put.putBuilder $ Map.foldlWithKey mapPairToBinary builder value
 
 mapPairToBinary :: Builder -> OtpErlangTerm -> OtpErlangTerm -> Builder
 mapPairToBinary builder key value =
