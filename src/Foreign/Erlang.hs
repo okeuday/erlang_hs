@@ -138,11 +138,6 @@ tagAtomUtf8Ext = 118
 tagSmallAtomUtf8Ext :: Word8
 tagSmallAtomUtf8Ext = 119
 
-{-
-bufferSize :: Int
-bufferSize = 65536
--}
-
 data OtpErlangTerm =
       OtpErlangInteger Int
     | OtpErlangIntegerBig Integer
@@ -198,9 +193,21 @@ termToBinary :: (Monad m) => OtpErlangTerm -> Int -> m LazyByteString
 termToBinary term compressed
     | compressed < (-1) || compressed > 9 =
         fail $ inputError "compressed in [-1..9]"
-    | otherwise =
-        let data_uncompressed = Put.runPut $ termsToBinary term in
+    | compressed == (-1) =
         return $ LazyByteString.cons tagVersion data_uncompressed
+    | otherwise =
+        let size_uncompressed = LazyByteString.length data_uncompressed
+            params = Zlib.defaultCompressParams {
+                Zlib.compressLevel = Zlib.CompressionLevel compressed }
+            data_compressed = Zlib.compressWith params data_uncompressed in
+        if size_uncompressed > 4294967295 then
+            fail $ outputError "uint32 overflow"
+        else
+            return $ Put.runPut $ Put.putBuilder $ Builder.append
+                (Builder.append (Builder.singleton tagVersion)
+                    (Builder.putWord32be $ fromIntegral size_uncompressed))
+                (Builder.fromLazyByteString data_compressed)
+    where data_uncompressed = Put.runPut $ termsToBinary term
 
 binaryToTerms :: Get OtpErlangTerm
 binaryToTerms = do
@@ -449,7 +456,7 @@ termsToBinary (OtpErlangIntegerBig value) =
         Put.putBuilder $ Builder.fromLazyByteString l_result
     else if l_length <= 4294967295 then do
         Put.putWord8 tagLargeBigExt
-        Put.putInt32be $ fromIntegral l_length
+        Put.putWord32be $ fromIntegral l_length
         Put.putWord8 sign
         Put.putBuilder $ Builder.fromLazyByteString l_result
     else do

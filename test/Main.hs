@@ -47,6 +47,7 @@ import Test.HUnit
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as LazyByteString
+import qualified Data.ByteString.Lazy.Char8 as LazyChar8
 import qualified Data.Word as Word
 import qualified Foreign.Erlang as Erlang
 import qualified Foreign.Erlang.Pid as Erlang
@@ -73,19 +74,26 @@ termOk binary =
         Left err -> error err
         Right term -> term
         
+binaryOk :: OtpErlangTerm -> String
+binaryOk term =
+    case Erlang.termToBinary term (-1) of
+        Left err -> error err
+        Right binary -> LazyChar8.unpack binary
+        
 testPid :: Test
 testPid = 
     let pid1 =
             pidMake 100
                 "\x00\x0d\x6e\x6f\x6e\x6f\x64\x65\x40\x6e\x6f\x68\x6f\x73\x74"
                 "\x00\x00\x00\x3b" "\x00\x00\x00\x00" 0
-        test1 = TestCase $ assertEqual "binary->pid"
-            (termOk $
-                "\x83\x67\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F" ++
-                "\x68\x6F\x73\x74\x00\x00\x00\x3B\x00\x00\x00\x00\x00")
-            pid1
+        binary = "\x83\x67\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F" ++
+                 "\x68\x6F\x73\x74\x00\x00\x00\x3B\x00\x00\x00\x00\x00"
+        test1 = TestCase $ assertEqual "pid->binary"
+            (binaryOk $ pid1) binary
+        test2 = TestCase $ assertEqual "binary->pid"
+            (termOk $ binary) pid1
     in
-    TestLabel "testPid" (TestList [test1])
+    TestLabel "testPid" (TestList [test1, test2])
 
 main :: IO Counts
 main = runTestTT $ TestList [
