@@ -41,7 +41,9 @@
 
  -}
 
-module Foreign.Erlang.Reference where
+module Foreign.Erlang.Reference
+    ( Reference(..)
+    ) where
 
 import Prelude hiding (id)
 import qualified Data.ByteString as ByteString

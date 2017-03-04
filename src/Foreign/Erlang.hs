@@ -43,39 +43,42 @@
 
 module Foreign.Erlang
     ( OtpErlangTerm(..)
-    , Pid
-    , Port
-    , Reference
-    , Function
     , binaryToTerm
+    , termToBinary
     ) where
 
 import Control.Monad
 import Prelude hiding (id,length,tail)
+import Data.Bits ((.&.))
 import qualified Data.Binary.Get as Get
+import qualified Data.Binary.Put as Put
+import qualified Data.Binary.Builder as Builder
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as LazyByteString
 import qualified Data.Int as DataInt
 import qualified Data.List as List
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import qualified Data.Word as Word
 import qualified Codec.Compression.Zlib as Zlib
-import qualified Foreign.Erlang.Pid as Pid
-import qualified Foreign.Erlang.Port as Port
-import qualified Foreign.Erlang.Reference as Reference
-import qualified Foreign.Erlang.Function as Function
-type ByteString = ByteString.ByteString
+import qualified Foreign.Erlang.Pid as Erlang
+import qualified Foreign.Erlang.Port as Erlang
+import qualified Foreign.Erlang.Reference as Erlang
+import qualified Foreign.Erlang.Function as Erlang
 type Get = Get.Get
+type Put = Put.Put
+type Builder = Builder.Builder
+type ByteString = ByteString.ByteString
+type LazyByteString = LazyByteString.ByteString
 type Int32 = DataInt.Int32
 type Map = Map.Map
 type Word8 = Word.Word8
 type Word16 = Word.Word16
 type Word32 = Word.Word32
-type Pid = Pid.Pid
-type Port = Port.Port
-type Reference = Reference.Reference
-type Function = Function.Function
+type Pid = Erlang.Pid
+type Port = Erlang.Port
+type Reference = Erlang.Reference
+type Function = Erlang.Function
 
 -- tag values here http://www.erlang.org/doc/apps/erts/erl_ext_dist.html
 tagVersion :: Word8
@@ -181,16 +184,23 @@ getUnsignedInt8or32 False = do
     value <- Get.getWord32be
     return $ getUnsignedInt32 value
 
-binaryToTerm :: (Monad m) => ByteString -> m OtpErlangTerm
+binaryToTerm :: (Monad m) => LazyByteString -> m OtpErlangTerm
 binaryToTerm binary =
-    let size = ByteString.length binary in
+    let size = LazyByteString.length binary in
     if size <= 1 then
         fail $ parseError "null input"
-    else if ByteString.head binary /= tagVersion then
+    else if LazyByteString.head binary /= tagVersion then
         fail $ parseError "invalid version"
     else
-        let b = LazyByteString.fromStrict (ByteString.tail binary) in
-        return $ Get.runGet binaryToTerms b
+        return $ Get.runGet binaryToTerms (LazyByteString.tail binary)
+
+termToBinary :: (Monad m) => OtpErlangTerm -> Int -> m LazyByteString
+termToBinary term compressed
+    | compressed < (-1) || compressed > 9 =
+        fail $ inputError "compressed in [-1..9]"
+    | otherwise =
+        let data_uncompressed = Put.runPut $ termsToBinary term in
+        return $ LazyByteString.cons tagVersion data_uncompressed
 
 binaryToTerms :: Get OtpErlangTerm
 binaryToTerms = do
@@ -226,10 +236,10 @@ binaryToTerms = do
             id <- Get.getByteString 4
             creation <- Get.getWord8
             if tag == tagReferenceExt then
-                return $ OtpErlangReference $ Reference.Reference
+                return $ OtpErlangReference $ Erlang.Reference
                     nodeTag node id creation
             else if tag == tagPortExt then
-                return $ OtpErlangPort $ Port.Port
+                return $ OtpErlangPort $ Erlang.Port
                     nodeTag node id creation
             else
                 fail $ parseError "invalid"
@@ -238,7 +248,7 @@ binaryToTerms = do
             id <- Get.getByteString 4
             serial <- Get.getByteString 4
             creation <- Get.getWord8
-            return $ OtpErlangPid $ Pid.Pid
+            return $ OtpErlangPid $ Erlang.Pid
                 nodeTag node id serial creation
         | tag == tagSmallTupleExt || tag == tagLargeTupleExt -> do
             length <- getUnsignedInt8or32 $ tag == tagSmallTupleExt
@@ -275,19 +285,19 @@ binaryToTerms = do
         | tag == tagNewFunExt -> do
             length <- Get.getWord32be
             value <- Get.getByteString $ getUnsignedInt32 length
-            return $ OtpErlangFunction $ Function.Function
+            return $ OtpErlangFunction $ Erlang.Function
                 tag value
         | tag == tagExportExt -> do
             length <- Get.lookAhead $ binaryToExportSize
             value <- Get.getByteString length
-            return $ OtpErlangFunction $ Function.Function
+            return $ OtpErlangFunction $ Erlang.Function
                 tag value
         | tag == tagNewReferenceExt -> do
             j <- Get.getWord16be
             (nodeTag, node) <- binaryToAtom
             creation <- Get.getWord8
             id <- Get.getByteString $ (getUnsignedInt16 j) * 4
-            return $ OtpErlangReference $ Reference.Reference
+            return $ OtpErlangReference $ Erlang.Reference
                 nodeTag node id creation
         | tag == tagSmallAtomExt -> do
             j <- Get.getWord8
@@ -300,7 +310,7 @@ binaryToTerms = do
         | tag == tagFunExt -> do
             length <- Get.lookAhead $ binaryToFunSize
             value <- Get.getByteString length
-            return $ OtpErlangFunction $ Function.Function
+            return $ OtpErlangFunction $ Erlang.Function
                 tag value
         | tag == tagAtomUtf8Ext -> do
             j <- Get.getWord16be
@@ -381,7 +391,7 @@ binaryToPid = do
             id <- Get.getByteString 4
             serial <- Get.getByteString 4
             creation <- Get.getWord8
-            return $ Pid.Pid
+            return $ Erlang.Pid
                 nodeTag node id serial creation
         | otherwise ->
             fail $ parseError "invalid pid tag"
@@ -412,11 +422,211 @@ binaryToAtom = do
         | otherwise ->
             fail $ parseError "invalid atom tag"
 
-{-
+termsToBinary :: OtpErlangTerm -> Put
+termsToBinary (OtpErlangInteger value)
+    | value >= 0 && value <= 255 = do
+        Put.putWord8 tagSmallIntegerExt
+        Put.putWord8 $ fromIntegral value
+    | value >= (-2147483648) && value <= 2147483647 = do
+        Put.putWord8 tagIntegerExt
+        Put.putInt32be $ fromIntegral value
+    | otherwise =
+        termsToBinary $ OtpErlangIntegerBig $ fromIntegral value
+termsToBinary (OtpErlangIntegerBig value) =
+    let sign = if value < 0 then 1 else 0
+        loop bignum l =
+            if bignum > 0 then
+                loop (bignum `quot` 256)
+                    (LazyByteString.cons (fromIntegral $ bignum .&. 255) l)
+            else
+                LazyByteString.reverse l
+        l_result = loop (abs value) LazyByteString.empty
+        l_length = LazyByteString.length l_result in
+    if l_length <= 255 then do
+        Put.putWord8 tagSmallBigExt
+        Put.putWord8 $ fromIntegral l_length
+        Put.putWord8 sign
+        Put.putBuilder $ Builder.fromLazyByteString l_result
+    else if l_length <= 4294967295 then do
+        Put.putWord8 tagLargeBigExt
+        Put.putInt32be $ fromIntegral l_length
+        Put.putWord8 sign
+        Put.putBuilder $ Builder.fromLazyByteString l_result
+    else do
+        fail $ outputError "uint32 overflow"
+termsToBinary (OtpErlangFloat value) = do
+    Put.putWord8 tagNewFloatExt
+    Put.putDoublebe value
+termsToBinary (OtpErlangAtom value) =
+    let length = ByteString.length value in
+    if length <= 255 then do
+        Put.putWord8 tagSmallAtomExt
+        Put.putWord8 $ fromIntegral length
+        Put.putBuilder $ Builder.fromByteString value
+    else if length <= 65535 then do
+        Put.putWord8 tagAtomExt
+        Put.putWord16be $ fromIntegral length
+        Put.putBuilder $ Builder.fromByteString value
+    else do
+        fail $ outputError "uint16 overflow"
+termsToBinary (OtpErlangAtomUTF8 value) =
+    let length = ByteString.length value in
+    if length <= 255 then do
+        Put.putWord8 tagSmallAtomUtf8Ext
+        Put.putWord8 $ fromIntegral length
+        Put.putBuilder $ Builder.fromByteString value
+    else if length <= 65535 then do
+        Put.putWord8 tagAtomUtf8Ext
+        Put.putWord16be $ fromIntegral length
+        Put.putBuilder $ Builder.fromByteString value
+    else do
+        fail $ outputError "uint16 overflow"
+termsToBinary (OtpErlangAtomCacheRef value) = do
+    Put.putWord8 tagAtomCacheRef
+    Put.putWord8 $ fromIntegral value
+termsToBinary (OtpErlangAtomBool value) =
+    if value then
+        termsToBinary $ OtpErlangAtom $ Char8.pack "true"
+    else
+        termsToBinary $ OtpErlangAtom $ Char8.pack "false"
+termsToBinary (OtpErlangString value) =
+    let length = ByteString.length value in
+    if length == 0 then do
+        Put.putWord8 tagNilExt
+    else if length <= 65535 then do
+        Put.putWord8 tagStringExt
+        Put.putWord16be $ fromIntegral length
+        Put.putBuilder $ Builder.fromByteString value
+    else if length <= 4294967295 then do
+        Put.putWord8 tagListExt
+        Put.putWord32be $ fromIntegral length
+        Put.putWord8 tagSmallIntegerExt
+        Put.putBuilder $ Builder.fromByteString $
+            ByteString.intersperse tagSmallIntegerExt value
+        Put.putWord8 tagNilExt
+    else do
+        fail $ outputError "uint32 overflow"
+termsToBinary (OtpErlangBinary value) =
+    let length = ByteString.length value in
+    if length <= 4294967295 then do
+        Put.putWord8 tagBinaryExt
+        Put.putWord32be $ fromIntegral length
+        Put.putBuilder $ Builder.fromByteString value
+    else do
+        fail $ outputError "uint32 overflow"
+termsToBinary (OtpErlangBinaryBits (value, 8)) =
+    termsToBinary $ OtpErlangBinary value
+termsToBinary (OtpErlangBinaryBits (value, bits)) =
+    let length = ByteString.length value in
+    if length <= 4294967295 then do
+        Put.putWord8 tagBinaryExt
+        Put.putWord32be $ fromIntegral length
+        Put.putWord8 $ fromIntegral bits
+        Put.putBuilder $ Builder.fromByteString value
+    else do
+        fail $ outputError "uint32 overflow"
+termsToBinary (OtpErlangList value) =
+    let length = List.length value in
+    if length == 0 then do
+        Put.putWord8 tagNilExt
+    else if length <= 4294967295 then do
+        Put.putWord8 tagListExt
+        Put.putWord32be $ fromIntegral length
+        sequenceToBinary value Builder.empty
+        Put.putWord8 tagNilExt
+    else do
+        fail $ outputError "uint32 overflow"
+termsToBinary (OtpErlangListImproper value) = 
+    let length = List.length value in
+    if length == 0 then do
+        Put.putWord8 tagNilExt -- misuse of type
+    else if length <= 4294967295 then do
+        Put.putWord8 tagListExt
+        Put.putWord32be $ fromIntegral (length - 1)
+        sequenceToBinary value Builder.empty
+    else do
+        fail $ outputError "uint32 overflow"
+termsToBinary (OtpErlangTuple value) =
+    let length = List.length value in
+    if length <= 255 then do
+        Put.putWord8 tagSmallTupleExt
+        Put.putWord8 $ fromIntegral length
+        sequenceToBinary value Builder.empty
+    else if length <= 4294967295 then do
+        Put.putWord8 tagLargeTupleExt
+        Put.putWord32be $ fromIntegral length
+        sequenceToBinary value Builder.empty
+    else do
+        fail $ outputError "uint32 overflow"
+termsToBinary (OtpErlangMap value) =
+    let length = Map.size value in
+    if length <= 4294967295 then do
+        Put.putWord8 tagMapExt
+        Put.putWord32be $ fromIntegral length
+        mapToBinary value Builder.empty
+    else do
+        fail $ outputError "uint32 overflow"
+termsToBinary (OtpErlangPid (Erlang.Pid nodeTag node id serial creation)) = do
+    Put.putWord8 tagPidExt
+    Put.putWord8 nodeTag
+    Put.putBuilder $ Builder.fromByteString node
+    Put.putBuilder $ Builder.fromByteString id
+    Put.putBuilder $ Builder.fromByteString serial
+    Put.putWord8 creation
+termsToBinary (OtpErlangPort (Erlang.Port nodeTag node id creation)) = do
+    Put.putWord8 tagPortExt
+    Put.putWord8 nodeTag
+    Put.putBuilder $ Builder.fromByteString node
+    Put.putBuilder $ Builder.fromByteString id
+    Put.putWord8 creation
+termsToBinary (OtpErlangReference (Erlang.Reference nodeTag node id creation)) =
+    let length = (ByteString.length id) `quot` 4 in
+    if length == 0 then do
+        Put.putWord8 tagReferenceExt
+        Put.putWord8 nodeTag
+        Put.putBuilder $ Builder.fromByteString node
+        Put.putBuilder $ Builder.fromByteString id
+        Put.putWord8 creation
+    else if length <= 65535 then do
+        Put.putWord8 tagNewReferenceExt
+        Put.putWord16be $ fromIntegral length
+        Put.putWord8 nodeTag
+        Put.putBuilder $ Builder.fromByteString node
+        Put.putWord8 creation
+        Put.putBuilder $ Builder.fromByteString id
+    else do
+        fail $ outputError "uint16 overflow"
+termsToBinary (OtpErlangFunction (Erlang.Function tag value)) = do
+    Put.putWord8 tag
+    Put.putBuilder $ Builder.fromByteString value
+
+sequenceToBinary :: [OtpErlangTerm] -> Builder -> Put
+sequenceToBinary [] builder = do
+    Put.putBuilder builder
+sequenceToBinary (h:t) builder =
+    let binary = Put.runPut $ termsToBinary h in
+    sequenceToBinary t
+        (Builder.append builder (Builder.fromLazyByteString binary))
+
+mapToBinary :: (Map OtpErlangTerm OtpErlangTerm) -> Builder -> Put
+mapToBinary value builder =
+    Put.putBuilder $ Map.foldlWithKey mapPairToBinary builder value
+
+mapPairToBinary :: Builder -> OtpErlangTerm -> OtpErlangTerm -> Builder
+mapPairToBinary builder key value =
+    let binary_key = Put.runPut $ termsToBinary key
+        binary_value = Put.runPut $ termsToBinary value in
+    Builder.append builder
+        (Builder.append
+            (Builder.fromLazyByteString binary_key)
+            (Builder.fromLazyByteString binary_value))
+
+inputError :: String -> String
+inputError s =
+    "inputError: " ++ s
 outputError :: String -> String
 outputError s =
     "outputError: " ++ s
--}
 parseError :: String -> String
 parseError s =
     "parseError: " ++ s

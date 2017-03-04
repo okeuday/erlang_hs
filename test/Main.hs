@@ -46,9 +46,10 @@ import Prelude hiding (id)
 import Test.HUnit
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
+import qualified Data.ByteString.Lazy as LazyByteString
 import qualified Data.Word as Word
 import qualified Foreign.Erlang as Erlang
-import qualified Foreign.Erlang.Pid as Pid
+import qualified Foreign.Erlang.Pid as Erlang
 type ByteString = ByteString.ByteString
 type Word8 = Word.Word8
 type OtpErlangTerm = Erlang.OtpErlangTerm
@@ -62,13 +63,13 @@ bytes str = Char8.pack str
 pidMake :: Int -> String -> String -> String -> Int -> OtpErlangTerm
 pidMake nodeTag node id serial creation =
     Erlang.OtpErlangPid $
-        Pid.Pid
+        Erlang.Pid
             (word8 nodeTag) (bytes node)
             (bytes id) (bytes serial) (word8 creation)
 
 termOk :: String -> OtpErlangTerm
 termOk binary =
-    case Erlang.binaryToTerm $ bytes binary of
+    case Erlang.binaryToTerm $ LazyByteString.fromStrict (bytes binary) of
         Left err -> error err
         Right term -> term
         

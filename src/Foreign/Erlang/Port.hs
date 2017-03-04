@@ -41,7 +41,9 @@
 
  -}
 
-module Foreign.Erlang.Port where
+module Foreign.Erlang.Port
+    ( Port(..)
+    ) where
 
 import Prelude hiding (id)
 import qualified Data.ByteString as ByteString

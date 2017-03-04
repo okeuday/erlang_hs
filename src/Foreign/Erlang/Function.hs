@@ -41,7 +41,9 @@
 
  -}
 
-module Foreign.Erlang.Function where
+module Foreign.Erlang.Function
+    ( Function(..)
+    ) where
 
 import qualified Data.ByteString as ByteString
 import qualified Data.Word as Word

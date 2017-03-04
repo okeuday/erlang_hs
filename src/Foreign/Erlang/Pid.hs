@@ -41,7 +41,9 @@
 
  -}
 
-module Foreign.Erlang.Pid where
+module Foreign.Erlang.Pid
+    ( Pid(..)
+    ) where
 
 import Prelude hiding (id)
 import qualified Data.ByteString as ByteString
