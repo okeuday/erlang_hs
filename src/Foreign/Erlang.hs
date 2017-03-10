@@ -198,6 +198,11 @@ getUnsignedInt8or32 False = do
     value <- Get.getWord32be
     return $ getUnsignedInt32 value
 
+boolTrue :: ByteString
+boolTrue = Char8.pack "true"
+boolFalse :: ByteString
+boolFalse = Char8.pack "false"
+
 binaryToTerm :: LazyByteString -> Result OtpErlangTerm
 binaryToTerm binary =
     let size = LazyByteString.length binary in
@@ -339,7 +344,12 @@ binaryToTerms = do
         | tag == tagSmallAtomExt -> do
             j <- Get.getWord8
             value <- Get.getByteString $ getUnsignedInt8 j
-            return $ OtpErlangAtom value
+            if value == boolTrue then
+                return $ OtpErlangAtomBool True
+            else if value == boolFalse then
+                return $ OtpErlangAtomBool False
+            else
+                return $ OtpErlangAtom value
         | tag == tagMapExt -> do
             length <- Get.getWord32be
             pairs <- replicateM (getUnsignedInt32 length) binaryToMapPair
