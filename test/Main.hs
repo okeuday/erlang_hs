@@ -64,6 +64,9 @@ word8 value = fromIntegral value
 bytes :: String -> ByteString
 bytes str = Char8.pack str
 
+duplicate :: Int -> String -> String
+duplicate n str = [1..n] >> str
+
 makePid :: Int -> String -> String -> String -> Int -> OtpErlangTerm
 makePid nodeTag node id serial creation =
     Erlang.OtpErlangPid $
@@ -487,6 +490,362 @@ testDecodeLargeBigInteger =
         (TestList [test1, test2, test3, test4, test5, test6, test7,
             test8, test9])
 
+testEncodeTuple :: Test
+testEncodeTuple =
+    let test1 = TestCase $ assertEqual "encode tuple 1"
+            (binaryOk $ Erlang.OtpErlangTuple ([]))
+            "\x83\x68\x00"
+        test2 = TestCase $ assertEqual "encode tuple 2"
+            (binaryOk $ Erlang.OtpErlangTuple ([
+                Erlang.OtpErlangTuple ([]), Erlang.OtpErlangTuple ([])]))
+            "\x83\x68\x02\x68\x00\x68\x00"
+        tupleCreate size l =
+            if size == 0 then
+                Erlang.OtpErlangTuple (l)
+            else
+                tupleCreate (size - 1 :: Int) ((Erlang.OtpErlangTuple ([])):l)
+        test3 = TestCase $ assertEqual "encode tuple 3"
+            (binaryOk $ tupleCreate 255 [])
+            ("\x83\x68\xff" ++ (duplicate 255 "\x68\x00"))
+        test4 = TestCase $ assertEqual "encode tuple 4"
+            (binaryOk $ tupleCreate 256 [])
+            ("\x83\x69\x00\x00\x01\x00" ++ (duplicate 256 "\x68\x00"))
+    in
+    TestLabel "testEncodeTuple" (TestList [test1, test2, test3, test4])
+
+testEncodeEmptyList :: Test
+testEncodeEmptyList =
+    let test1 = TestCase $ assertEqual "encode empty list 1"
+            (binaryOk $ Erlang.OtpErlangList ([]))
+            "\x83\x6a"
+    in
+    TestLabel "testEncodeEmptyList" (TestList [test1])
+
+testEncodeStringList :: Test
+testEncodeStringList =
+    let test1 = TestCase $ assertEqual "encode string list 1"
+            (binaryOk $ Erlang.OtpErlangString (bytes ""))
+            "\x83\x6a"
+        test2 = TestCase $ assertEqual "encode string list 2"
+            (binaryOk $ Erlang.OtpErlangString (bytes "\x00"))
+            "\x83\x6b\x00\x01\x00"
+        s = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r" ++
+            "\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a" ++
+            "\x1b\x1c\x1d\x1e\x1f\& !\"#$%&'()*+,-./0123456789:;<=>" ++
+            "?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopq" ++
+            "rstuvwxyz{|}~\x7f\x80\x81\x82\x83\x84\x85\x86\x87\x88" ++
+            "\x89\x8a\x8b\x8c\x8d\x8e\x8f\x90\x91\x92\x93\x94\x95" ++
+            "\x96\x97\x98\x99\x9a\x9b\x9c\x9d\x9e\x9f\xa0\xa1\xa2" ++
+            "\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xab\xac\xad\xae\xaf" ++
+            "\xb0\xb1\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xbb\xbc" ++
+            "\xbd\xbe\xbf\xc0\xc1\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9" ++
+            "\xca\xcb\xcc\xcd\xce\xcf\xd0\xd1\xd2\xd3\xd4\xd5\xd6" ++
+            "\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xe0\xe1\xe2\xe3" ++
+            "\xe4\xe5\xe6\xe7\xe8\xe9\xea\xeb\xec\xed\xee\xef\xf0" ++
+            "\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfe\xff"
+        test3 = TestCase $ assertEqual "encode string list 3"
+            (binaryOk $ Erlang.OtpErlangString (bytes s))
+            ("\x83\x6b\x01\x00" ++ s)
+    in
+    TestLabel "testEncodeStringList" (TestList [test1, test2, test3])
+
+testEncodeListBasic :: Test
+testEncodeListBasic =
+    let test1 = TestCase $ assertEqual "encode list basic 1"
+            (binaryOk $ Erlang.OtpErlangString (bytes ""))
+            "\x83\x6A"
+        test2 = TestCase $ assertEqual "encode list basic 2"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangString (bytes "")]))
+            "\x83\x6C\x00\x00\x00\x01\x6A\x6A"
+        test3 = TestCase $ assertEqual "encode list basic 3"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (1)]))
+            "\x83\x6C\x00\x00\x00\x01\x61\x01\x6A"
+        test4 = TestCase $ assertEqual "encode list basic 4"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (255)]))
+            "\x83\x6C\x00\x00\x00\x01\x61\xFF\x6A"
+        test5 = TestCase $ assertEqual "encode list basic 5"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (256)]))
+            "\x83\x6C\x00\x00\x00\x01\x62\x00\x00\x01\x00\x6A"
+        test6 = TestCase $ assertEqual "encode list basic 6"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (2147483647)]))
+            "\x83\x6C\x00\x00\x00\x01\x62\x7F\xFF\xFF\xFF\x6A"
+        test7 = TestCase $ assertEqual "encode list basic 7"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangIntegerBig (2147483648)]))
+            "\x83\x6C\x00\x00\x00\x01\x6E\x04\x00\x00\x00\x00\x80\x6A"
+        test8 = TestCase $ assertEqual "encode list basic 8"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (0)]))
+            "\x83\x6C\x00\x00\x00\x01\x61\x00\x6A"
+        test9 = TestCase $ assertEqual "encode list basic 9"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (-1)]))
+            "\x83\x6C\x00\x00\x00\x01\x62\xFF\xFF\xFF\xFF\x6A"
+        test10 = TestCase $ assertEqual "encode list basic 10"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (-256)]))
+            "\x83\x6C\x00\x00\x00\x01\x62\xFF\xFF\xFF\x00\x6A"
+        test11 = TestCase $ assertEqual "encode list basic 11"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (-257)]))
+            "\x83\x6C\x00\x00\x00\x01\x62\xFF\xFF\xFE\xFF\x6A"
+        test12 = TestCase $ assertEqual "encode list basic 12"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (-2147483648)]))
+            "\x83\x6C\x00\x00\x00\x01\x62\x80\x00\x00\x00\x6A"
+        test13 = TestCase $ assertEqual "encode list basic 13"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (-2147483649)]))
+            "\x83\x6C\x00\x00\x00\x01\x6E\x04\x01\x01\x00\x00\x80\x6A"
+        test14 = TestCase $ assertEqual "encode list basic 14"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangString (bytes "test")]))
+            "\x83\x6C\x00\x00\x00\x01\x6B\x00\x04\x74\x65\x73\x74\x6A"
+        test15 = TestCase $ assertEqual "encode list basic 15"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangInteger (373),
+                Erlang.OtpErlangInteger (455)]))
+            ("\x83\x6C\x00\x00\x00\x02\x62\x00\x00\x01\x75\x62\x00\x00" ++
+             "\x01\xC7\x6A")
+        test16 = TestCase $ assertEqual "encode list basic 16"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangList ([])]))
+            "\x83\x6C\x00\x00\x00\x01\x6A\x6A"
+        test17 = TestCase $ assertEqual "encode list basic 17"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([])]))
+            "\x83\x6C\x00\x00\x00\x02\x6A\x6A\x6A"
+        test18 = TestCase $ assertEqual "encode list basic 18"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangList ([
+                    Erlang.OtpErlangString (bytes "this"),
+                    Erlang.OtpErlangString (bytes "is")
+                ]),
+                Erlang.OtpErlangList ([Erlang.OtpErlangList ([
+                    Erlang.OtpErlangString (bytes "a")])]),
+                Erlang.OtpErlangString (bytes "test")
+                ]))
+            ("\x83\x6C\x00\x00\x00\x03\x6C\x00\x00\x00\x02\x6B\x00\x04" ++
+             "\x74\x68\x69\x73\x6B\x00\x02\x69\x73\x6A\x6C\x00\x00\x00" ++
+             "\x01\x6C\x00\x00\x00\x01\x6B\x00\x01\x61\x6A\x6A\x6B\x00" ++
+             "\x04\x74\x65\x73\x74\x6A")
+    in
+    TestLabel "testEncodeListBasic"
+        (TestList [test1, test2, test3, test4, test5, test6, test7,
+            test8, test9, test10, test11, test12, test13, test14,
+            test15, test16, test17, test18])
+
+testEncodeList :: Test
+testEncodeList =
+    let test1 = TestCase $ assertEqual "encode list 1"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangList ([])]))
+            "\x83\x6c\x00\x00\x00\x01\x6a\x6a"
+        test2 = TestCase $ assertEqual "encode list 2"
+            (binaryOk $ Erlang.OtpErlangList ([
+                Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([]),
+                Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([]),
+                Erlang.OtpErlangList ([])]))
+            "\x83\x6c\x00\x00\x00\x05\x6a\x6a\x6a\x6a\x6a\x6a"
+    in
+    TestLabel "testEncodeList" (TestList [test1, test2])
+
+testEncodeImproperList :: Test
+testEncodeImproperList =
+    let test1 = TestCase $ assertEqual "encode improper list 1"
+            (binaryOk $ Erlang.OtpErlangListImproper ([
+                Erlang.OtpErlangTuple ([]), Erlang.OtpErlangTuple ([])]))
+            "\x83\x6c\x00\x00\x00\x01\x68\x00\x68\x00"
+        test2 = TestCase $ assertEqual "encode improper list 2"
+            (binaryOk $ Erlang.OtpErlangListImproper ([
+                Erlang.OtpErlangInteger (0), Erlang.OtpErlangInteger (1)]))
+            "\x83\x6c\x00\x00\x00\x01\x61\x00\x61\x01"
+    in
+    TestLabel "testEncodeImproperList" (TestList [test1, test2])
+
+testEncodeUnicode :: Test
+testEncodeUnicode =
+    let test1 = TestCase $ assertEqual "encode unicode 1"
+            (binaryOk $ Erlang.OtpErlangString (bytes ""))
+            "\x83\x6a"
+        test2 = TestCase $ assertEqual "encode unicode 2"
+            (binaryOk $ Erlang.OtpErlangString (bytes "test"))
+            "\x83\x6b\x00\x04\&test"
+        test3 = TestCase $ assertEqual "encode unicode 3"
+            (binaryOk $ Erlang.OtpErlangString (bytes "\x00\xc3\xbf"))
+            "\x83\x6b\x00\x03\x00\xc3\xbf"
+        test4 = TestCase $ assertEqual "encode unicode 4"
+            (binaryOk $ Erlang.OtpErlangString (bytes "\xc4\x80"))
+            "\x83\x6b\x00\x02\xc4\x80"
+        test5 = TestCase $ assertEqual "encode unicode 5"
+            (binaryOk $ Erlang.OtpErlangString
+                (bytes "\xd1\x82\xd0\xb5\xd1\x81\xd1\x82"))
+            "\x83\x6b\x00\x08\xd1\x82\xd0\xb5\xd1\x81\xd1\x82"
+        test6 = TestCase $ assertEqual "encode unicode 6"
+            (binaryOk $ Erlang.OtpErlangString
+                (bytes $ duplicate 65536 "\xd0\x90"))
+            ("\x83\x6c\x00\x02\x00\x00" ++
+                (duplicate 65536 "\x61\xd0\x61\x90") ++ "\x6a")
+    in
+    TestLabel "testEncodeUnicode"
+        (TestList [test1, test2, test3, test4, test5, test6])
+
+testEncodeAtom :: Test
+testEncodeAtom =
+    let test1 = TestCase $ assertEqual "encode atom 1"
+            (binaryOk $ Erlang.OtpErlangAtom (bytes ""))
+            "\x83\x73\x00"
+        test2 = TestCase $ assertEqual "encode atom 2"
+            (binaryOk $ Erlang.OtpErlangAtom (bytes "test"))
+            "\x83\x73\x04\&test"
+    in
+    TestLabel "testEncodeAtom" (TestList [test1, test2])
+
+testEncodeStringBasic :: Test
+testEncodeStringBasic =
+    let test1 = TestCase $ assertEqual "encode string basic 1"
+            (binaryOk $ Erlang.OtpErlangString (bytes ""))
+            "\x83\x6A"
+        test2 = TestCase $ assertEqual "encode string basic 2"
+            (binaryOk $ Erlang.OtpErlangString (bytes "test"))
+            "\x83\x6B\x00\x04\x74\x65\x73\x74"
+        test3 = TestCase $ assertEqual "encode string basic 3"
+            (binaryOk $ Erlang.OtpErlangString (bytes "two words"))
+            "\x83\x6B\x00\x09\x74\x77\x6F\x20\x77\x6F\x72\x64\x73"
+        test4 = TestCase $ assertEqual "encode string basic 4"
+            (binaryOk $ Erlang.OtpErlangString
+                (bytes "testing multiple words"))
+            ("\x83\x6B\x00\x16\x74\x65\x73\x74\x69\x6E\x67\x20\x6D" ++
+             "\x75\x6C\x74\x69\x70\x6C\x65\x20\x77\x6F\x72\x64\x73")
+        test5 = TestCase $ assertEqual "encode string basic 5"
+            (binaryOk $ Erlang.OtpErlangString (bytes " "))
+            "\x83\x6B\x00\x01\x20"
+        test6 = TestCase $ assertEqual "encode string basic 6"
+            (binaryOk $ Erlang.OtpErlangString (bytes "  "))
+            "\x83\x6B\x00\x02\x20\x20"
+        test7 = TestCase $ assertEqual "encode string basic 7"
+            (binaryOk $ Erlang.OtpErlangString (bytes "1"))
+            "\x83\x6B\x00\x01\x31"
+        test8 = TestCase $ assertEqual "encode string basic 8"
+            (binaryOk $ Erlang.OtpErlangString (bytes "37"))
+            "\x83\x6B\x00\x02\x33\x37"
+        test9 = TestCase $ assertEqual "encode string basic 9"
+            (binaryOk $ Erlang.OtpErlangString (bytes "one = 1"))
+            "\x83\x6B\x00\x07\x6F\x6E\x65\x20\x3D\x20\x31"
+        test10 = TestCase $ assertEqual "encode string basic 10"
+            (binaryOk $ Erlang.OtpErlangString
+                (bytes "!@#$%^&*()_+-=[]{}\\|;':\",./<>?~`"))
+            ("\x83\x6B\x00\x20\x21\x40\x23\x24\x25\x5E\x26\x2A\x28" ++
+             "\x29\x5F\x2B\x2D\x3D\x5B\x5D\x7B\x7D\x5C\x7C\x3B\x27" ++
+             "\x3A\x22\x2C\x2E\x2F\x3C\x3E\x3F\x7E\x60")
+        test11 = TestCase $ assertEqual "encode string basic 11"
+            (binaryOk $ Erlang.OtpErlangString
+                (bytes "\"\x08\x0c\n\r\t\x0b\&S\x12"))
+            "\x83\x6B\x00\x09\x22\x08\x0C\x0A\x0D\x09\x0B\x53\x12"
+    in
+    TestLabel "testEncodeStringBasic"
+        (TestList [test1, test2, test3, test4, test5, test6, test7,
+            test8, test9, test10, test11])
+
+testEncodeString :: Test
+testEncodeString =
+    let test1 = TestCase $ assertEqual "encode string 1"
+            (binaryOk $ Erlang.OtpErlangString (bytes ""))
+            "\x83\x6A"
+        test2 = TestCase $ assertEqual "encode string 2"
+            (binaryOk $ Erlang.OtpErlangString (bytes "test"))
+            "\x83\x6B\x00\x04\&test"
+    in
+    TestLabel "testEncodeString" (TestList [test1, test2])
+
+testEncodeBoolean :: Test
+testEncodeBoolean =
+    let test1 = TestCase $ assertEqual "encode boolean 1"
+            (binaryOk $ Erlang.OtpErlangAtomBool (True))
+            "\x83\x73\x04\&true"
+        test2 = TestCase $ assertEqual "encode boolean 2"
+            (binaryOk $ Erlang.OtpErlangAtomBool (False))
+            "\x83\x73\x05\&false"
+    in
+    TestLabel "testEncodeBoolean" (TestList [test1, test2])
+
+testEncodeSmallInteger :: Test
+testEncodeSmallInteger =
+    let test1 = TestCase $ assertEqual "encode small integer 1"
+            (binaryOk $ Erlang.OtpErlangInteger (0))
+            "\x83\x61\x00"
+        test2 = TestCase $ assertEqual "encode small integer 2"
+            (binaryOk $ Erlang.OtpErlangInteger (255))
+            "\x83\x61\xff"
+    in
+    TestLabel "testEncodeSmallInteger" (TestList [test1, test2])
+
+testEncodeInteger :: Test
+testEncodeInteger =
+    let test1 = TestCase $ assertEqual "encode integer 1"
+            (binaryOk $ Erlang.OtpErlangInteger (-1))
+            "\x83\x62\xff\xff\xff\xff"
+        test2 = TestCase $ assertEqual "encode integer 2"
+            (binaryOk $ Erlang.OtpErlangInteger (-2147483648))
+            "\x83\x62\x80\x00\x00\x00"
+        test3 = TestCase $ assertEqual "encode integer 3"
+            (binaryOk $ Erlang.OtpErlangInteger (256))
+            "\x83\x62\x00\x00\x01\x00"
+        test4 = TestCase $ assertEqual "encode integer 4"
+            (binaryOk $ Erlang.OtpErlangInteger (2147483647))
+            "\x83\x62\x7f\xff\xff\xff"
+    in
+    TestLabel "testEncodeInteger" (TestList [test1, test2, test3, test4])
+
+testEncodeSmallBigInteger :: Test
+testEncodeSmallBigInteger =
+    let test1 = TestCase $ assertEqual "encode small big integer 1"
+            (binaryOk $ Erlang.OtpErlangIntegerBig (2147483648))
+            "\x83\x6e\x04\x00\x00\x00\x00\x80"
+        test2 = TestCase $ assertEqual "encode small big integer 2"
+            (binaryOk $ Erlang.OtpErlangIntegerBig (-2147483649))
+            "\x83\x6e\x04\x01\x01\x00\x00\x80"
+    in
+    TestLabel "testEncodeSmallBigInteger" (TestList [test1, test2])
+
+testEncodeLargeBigInteger :: Test
+testEncodeLargeBigInteger =
+    let test1 = TestCase $ assertEqual "encode large big integer 1"
+            (binaryOk $ Erlang.OtpErlangIntegerBig (126238304966058622268417487065116999845484776053576109500509161826268184136202698801551568013761380717534054534851164138648904527931605160527688095259563605939964364716019515983399209962459578542172100149937763938581219604072733422507180056009672540900709554109516816573779593326332288314873251559077853068444977864803391962580800682760017849589281937637993445539366428356761821065267423102149447628375691862210717202025241630303118559188678304314076943801692528246980959705901641444238894928620825482303431806955690226308773426829503900930529395181208739591967195841536053143145775307050594328881077553168201547776))
+            ("\x83\x6f\x00\x00\x01\x00\x00" ++
+             (duplicate 255 "\x00") ++ "\x01")
+        test2 = TestCase $ assertEqual "encode large big integer 2"
+            (binaryOk $ Erlang.OtpErlangIntegerBig (-126238304966058622268417487065116999845484776053576109500509161826268184136202698801551568013761380717534054534851164138648904527931605160527688095259563605939964364716019515983399209962459578542172100149937763938581219604072733422507180056009672540900709554109516816573779593326332288314873251559077853068444977864803391962580800682760017849589281937637993445539366428356761821065267423102149447628375691862210717202025241630303118559188678304314076943801692528246980959705901641444238894928620825482303431806955690226308773426829503900930529395181208739591967195841536053143145775307050594328881077553168201547776))
+            ("\x83\x6f\x00\x00\x01\x00\x01" ++
+             (duplicate 255 "\x00") ++ "\x01")
+    in
+    TestLabel "testEncodeLargeBigInteger" (TestList [test1, test2])
+
+testEncodeFloat :: Test
+testEncodeFloat =
+    let test1 = TestCase $ assertEqual "encode float 1"
+            (binaryOk $ Erlang.OtpErlangFloat (0.0))
+            "\x83\x46\x00\x00\x00\x00\x00\x00\x00\x00"
+        test2 = TestCase $ assertEqual "encode float 2"
+            (binaryOk $ Erlang.OtpErlangFloat (0.5))
+            "\x83\x46\x3f\xe0\x00\x00\x00\x00\x00\x00"
+        test3 = TestCase $ assertEqual "encode float 3"
+            (binaryOk $ Erlang.OtpErlangFloat (-0.5))
+            "\x83\x46\xbf\xe0\x00\x00\x00\x00\x00\x00"
+        test4 = TestCase $ assertEqual "encode float 4"
+            (binaryOk $ Erlang.OtpErlangFloat (3.1415926))
+            "\x83\x46\x40\x09\x21\xfb\x4d\x12\xd8\x4a"
+        test5 = TestCase $ assertEqual "encode float 5"
+            (binaryOk $ Erlang.OtpErlangFloat (-3.1415926))
+            "\x83\x46\xc0\x09\x21\xfb\x4d\x12\xd8\x4a"
+    in
+    TestLabel "testEncodeFloat" (TestList [test1, test2, test3, test4, test5])
+
 main :: IO Counts
 main = do
     results <- runTestTT $ TestList [
@@ -507,7 +866,23 @@ main = do
         , testDecodeBinary
         , testDecodeFloat
         , testDecodeSmallBigInteger
-        , testDecodeLargeBigInteger]
+        , testDecodeLargeBigInteger
+        , testEncodeTuple
+        , testEncodeEmptyList
+        , testEncodeStringList
+        , testEncodeListBasic
+        , testEncodeList
+        , testEncodeImproperList
+        , testEncodeUnicode
+        , testEncodeAtom
+        , testEncodeStringBasic
+        , testEncodeString
+        , testEncodeBoolean
+        , testEncodeSmallInteger
+        , testEncodeInteger
+        , testEncodeSmallBigInteger
+        , testEncodeLargeBigInteger
+        , testEncodeFloat]
     if (errors results + failures results == 0) then
         exitWith ExitSuccess
     else
