@@ -241,6 +241,7 @@ termToBinary term compressed
                     else
                         ok $ Builder.toLazyByteString $
                             Builder.word8 tagVersion <>
+                            Builder.word8 tagCompressedZlib <>
                             Builder.word32BE (fromIntegral sizeUncompressed) <>
                             Builder.lazyByteString dataCompressed
 
@@ -373,7 +374,7 @@ binaryToTerms = do
             let dataUncompressed = Zlib.decompress $ compressed
                 size1 = fromIntegral $ getUnsignedInt32 sizeUncompressed
                 size2 = LazyByteString.length dataUncompressed
-            if size1 /= size2 then
+            if size1 == 0 || size1 /= size2 then
                 fail $ "compression corrupt"
             else
                 return $ Get.runGet binaryToTerms dataUncompressed
@@ -604,7 +605,7 @@ termsToBinary (OtpErlangList value) =
                     Builder.word8 tagNilExt
     else
         errorType $ OutputError "uint32 overflow"
-termsToBinary (OtpErlangListImproper value) = 
+termsToBinary (OtpErlangListImproper value) =
     let length = List.length value in
     if length == 0 then
         ok $ Builder.toLazyByteString $

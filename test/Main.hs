@@ -94,15 +94,21 @@ termError binary =
     case Erlang.binaryToTerm $ LazyByteString.fromStrict $ bytes binary of
         Left err -> show err
         Right term -> error $ show term
-        
+
 binaryOk :: OtpErlangTerm -> String
 binaryOk term =
     case Erlang.termToBinary term (-1) of
         Left err -> error $ show err
         Right binary -> LazyChar8.unpack binary
-        
+
+binaryCompressedOk :: OtpErlangTerm -> Int -> String
+binaryCompressedOk term compressed =
+    case Erlang.termToBinary term compressed of
+        Left err -> error $ show err
+        Right binary -> LazyChar8.unpack binary
+
 testPid :: Test
-testPid = 
+testPid =
     let pid1 =
             makePid 100
                 "\x00\x0d\x6e\x6f\x6e\x6f\x64\x65\x40\x6e\x6f\x68\x6f\x73\x74"
@@ -117,7 +123,7 @@ testPid =
     TestLabel "testPid" (TestList [test1, test2])
 
 testFunction :: Test
-testFunction = 
+testFunction =
     let function1 =
             makeFunction 113
                 ("\x64\x00\x05\x6c\x69\x73\x74\x73\x64" ++
@@ -132,7 +138,7 @@ testFunction =
     TestLabel "testFunction" (TestList [test1, test2])
 
 testReference :: Test
-testReference = 
+testReference =
     let reference1 =
             makeReference 100
                 "\x00\x0d\x6e\x6f\x6e\x6f\x64\x65\x40\x6e\x6f\x68\x6f\x73\x74"
@@ -490,6 +496,38 @@ testDecodeLargeBigInteger =
         (TestList [test1, test2, test3, test4, test5, test6, test7,
             test8, test9])
 
+testDecodeCompressedTerm :: Test
+testDecodeCompressedTerm =
+    let test1 = TestCase $ assertEqual "decode compressed term 1"
+            (termError $ "\x83\x50")
+            "ParseError \"not enough bytes\""
+        test2 = TestCase $ assertEqual "decode compressed term 2"
+            (termError $ "\x83\x50\x00")
+            "ParseError \"not enough bytes\""
+        test3 = TestCase $ assertEqual "decode compressed term 3"
+            (termError $ "\x83\x50\x00\x00")
+            "ParseError \"not enough bytes\""
+        test4 = TestCase $ assertEqual "decode compressed term 4"
+            (termError $ "\x83\x50\x00\x00\x00")
+            "ParseError \"not enough bytes\""
+        test5 = TestCase $ assertEqual "decode compressed term 5"
+            (termError $ "\x83\x50\x00\x00\x00\x00")
+            "ParseError \"compression corrupt\""
+        test6 = TestCase $ assertEqual "decode compressed term 6"
+            (termError $
+             ("\x83\x50\x00\x00\x00\x16" ++
+              "\x78\xda\xcb\x66\x10\x49\xc1\x02\x00\x5d\x60\x08\x50"))
+            "ParseError \"compression corrupt\""
+        str = Erlang.OtpErlangString (bytes $ duplicate 20 "d")
+        test7 = TestCase $ assertEqual "decode compressed term 7"
+            (termOk $
+             ("\x83\x50\x00\x00\x00\x17" ++
+              "\x78\xda\xcb\x66\x10\x49\xc1\x02\x00\x5d\x60\x08\x50"))
+            str
+    in
+    TestLabel "testDecodeCompressedTerm"
+        (TestList [test1, test2, test3, test4, test5, test6, test7])
+
 testEncodeTuple :: Test
 testEncodeTuple =
     let test1 = TestCase $ assertEqual "encode tuple 1"
@@ -846,6 +884,44 @@ testEncodeFloat =
     in
     TestLabel "testEncodeFloat" (TestList [test1, test2, test3, test4, test5])
 
+testEncodeCompressedTerm :: Test
+testEncodeCompressedTerm =
+    let list = Erlang.OtpErlangList ([
+            Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([]),
+            Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([]),
+            Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([]),
+            Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([]),
+            Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([]),
+            Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([]),
+            Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([]),
+            Erlang.OtpErlangList ([])])
+        test1 = TestCase $ assertEqual "encode compressed term 1"
+            (binaryCompressedOk list 6)
+            ("\x83\x50\x00\x00\x00\x15" ++
+             "\x78\x9c\xcb\x61\x60\x60\xe0\xcf\x42\x03\x00\x42\x40\x07\x1c")
+        test2 = TestCase $ assertEqual "encode compressed term 2"
+            (binaryCompressedOk list 9)
+            ("\x83\x50\x00\x00\x00\x15" ++
+             "\x78\xda\xcb\x61\x60\x60\xe0\xcf\x42\x03\x00\x42\x40\x07\x1c")
+        test3 = TestCase $ assertEqual "encode compressed term 3"
+            (binaryCompressedOk list 0)
+            ("\x83\x50\x00\x00\x00\x15" ++
+             "\x78\x01\x01\x15\x00\xea\xff\x6c\x00\x00\x00" ++
+             "\x0f\x6a\x6a\x6a\x6a\x6a\x6a\x6a\x6a\x6a\x6a" ++
+             "\x6a\x6a\x6a\x6a\x6a\x6a\x42\x40\x07\x1c")
+        test4 = TestCase $ assertEqual "encode compressed term 4"
+            (binaryCompressedOk list 1)
+            ("\x83\x50\x00\x00\x00\x15" ++
+             "\x78\x01\xcb\x61\x60\x60\xe0\xcf\x42\x03\x00\x42\x40\x07\x1c")
+        str = Erlang.OtpErlangString (bytes $ duplicate 20 "d")
+        test5 = TestCase $ assertEqual "encode compressed term 5"
+            (binaryCompressedOk str 9)
+            ("\x83\x50\x00\x00\x00\x17\x78\xda\xcb\x66" ++
+             "\x10\x49\xc1\x02\x00\x5d\x60\x08\x50")
+    in
+    TestLabel "testEncodeCompressedTerm"
+        (TestList [test1, test2, test3, test4, test5])
+
 main :: IO Counts
 main = do
     results <- runTestTT $ TestList [
@@ -867,6 +943,7 @@ main = do
         , testDecodeFloat
         , testDecodeSmallBigInteger
         , testDecodeLargeBigInteger
+        , testDecodeCompressedTerm
         , testEncodeTuple
         , testEncodeEmptyList
         , testEncodeStringList
@@ -882,8 +959,10 @@ main = do
         , testEncodeInteger
         , testEncodeSmallBigInteger
         , testEncodeLargeBigInteger
-        , testEncodeFloat]
+        , testEncodeFloat
+        , testEncodeCompressedTerm]
     if (errors results + failures results == 0) then
         exitWith ExitSuccess
     else
         exitWith (ExitFailure 1)
+
