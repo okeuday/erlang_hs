@@ -51,8 +51,8 @@ module Foreign.Erlang
 
 import Prelude hiding (length,tail)
 import Data.Bits ((.&.))
-import Data.Monoid ((<>),mempty)
 import Control.Monad (replicateM)
+import qualified Data.Monoid as Monoid
 import qualified Data.Binary.Get as Get
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
@@ -198,6 +198,10 @@ boolTrue :: ByteString
 boolTrue = Char8.pack "true"
 boolFalse :: ByteString
 boolFalse = Char8.pack "false"
+
+infixr 4 <>
+(<>) :: Monoid.Monoid m => m -> m -> m
+(<>) = Monoid.mappend
 
 binaryToTerm :: LazyByteString -> Result OtpErlangTerm
 binaryToTerm binary =
@@ -590,7 +594,7 @@ termsToBinary (OtpErlangList value) =
         ok $ Builder.toLazyByteString $
             Builder.word8 tagNilExt
     else if length <= 4294967295 then
-        case termSequenceToBinary value mempty of
+        case termSequenceToBinary value Monoid.mempty of
             Left err ->
                 errorType err
             Right listValue ->
@@ -607,7 +611,7 @@ termsToBinary (OtpErlangListImproper value) =
         ok $ Builder.toLazyByteString $
             Builder.word8 tagNilExt -- misuse of OtpErlangListImproper
     else if length <= 4294967295 then
-        case termSequenceToBinary value mempty of
+        case termSequenceToBinary value Monoid.mempty of
             Left err ->
                 errorType err
             Right listValue ->
@@ -620,7 +624,7 @@ termsToBinary (OtpErlangListImproper value) =
 termsToBinary (OtpErlangTuple value) =
     let length = List.length value in
     if length <= 255 then
-        case termSequenceToBinary value mempty of
+        case termSequenceToBinary value Monoid.mempty of
             Left err ->
                 errorType err
             Right tupleValue ->
@@ -629,7 +633,7 @@ termsToBinary (OtpErlangTuple value) =
                     Builder.word8 (fromIntegral length) <>
                     tupleValue
     else if length <= 4294967295 then
-        case termSequenceToBinary value mempty of
+        case termSequenceToBinary value Monoid.mempty of
             Left err ->
                 errorType err
             Right tupleValue ->
@@ -642,7 +646,7 @@ termsToBinary (OtpErlangTuple value) =
 termsToBinary (OtpErlangMap value) =
     let length = Map.size value in
     if length <= 4294967295 then
-        case Map.foldlWithKey mapPairToBinary (Right mempty) value of
+        case Map.foldlWithKey mapPairToBinary (Right Monoid.mempty) value of
             Left err ->
                 errorType err
             Right mapValue ->
