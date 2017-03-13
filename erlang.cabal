@@ -12,9 +12,12 @@ author:              Michael Truog
 maintainer:          mjtruog@gmail.com
 copyright:           2017 Michael Truog
 category:            Foreign
+stability:           provisional
 build-type:          Simple
 extra-source-files:  README.markdown
-cabal-version:       >=1.18
+cabal-version:       >= 1.8
+tested-with:         GHC == 7.4.2, GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3
+extra-source-files:  README.markdown
 
 library
   hs-source-dirs:      src
