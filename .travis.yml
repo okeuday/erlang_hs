@@ -1,0 +1,56 @@
+# See https://github.com/hvr/multi-ghc-travis for more information
+
+language: c
+
+sudo: false
+
+matrix:
+  include:
+    - env: CABALVER=1.18 GHCVER=7.4.2
+      addons: {apt: {packages: [cabal-install-1.18,ghc-7.4.2], sources: [hvr-ghc]}}
+    - env: CABALVER=1.18 GHCVER=7.6.3
+      addons: {apt: {packages: [cabal-install-1.18,ghc-7.6.3], sources: [hvr-ghc]}}
+    - env: CABALVER=1.22 GHCVER=7.8.4
+      addons: {apt: {packages: [cabal-install-1.22,ghc-7.8.4], sources: [hvr-ghc]}}
+    - env: CABALVER=1.22 GHCVER=7.10.3
+      addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.3], sources: [hvr-ghc]}}
+    - env: CABALVER=1.24 GHCVER=8.0.1
+      addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.1], sources: [hvr-ghc]}}
+    - env: CABALVER=head GHCVER=head
+      addons: {apt: {packages: [cabal-install-head,ghc-head],  sources: [hvr-ghc]}}
+
+  allow_failures:
+    - env: CABALVER=head GHCVER=head
+
+before_install:
+ - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
+
+install:
+ - cabal --version
+ - travis_retry cabal update
+ - cabal sandbox init
+ - cabal update
+ - cabal install --enable-tests --only-dependencies --force-reinstalls
+
+script:
+ - cabal configure --enable-tests -v2
+ - cabal build
+ - cabal test --show-details=always
+ - cabal sdist
+# check that the generated source-distribution can be built & installed
+ - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
+   cd dist/;
+   cabal sandbox init;
+   if [ -f "$SRC_TGZ" ]; then
+      cabal install --force-reinstalls "$SRC_TGZ";
+   else
+      echo "expected '$SRC_TGZ' not found";
+      exit 1;
+   fi
+
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net#cloudi"
+    on_success: change
+    on_failure: always
