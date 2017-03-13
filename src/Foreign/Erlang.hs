@@ -50,9 +50,9 @@ module Foreign.Erlang
     ) where
 
 import Prelude hiding (length,tail)
-import Data.Bits((.&.))
-import Data.Monoid(Monoid,mappend,mempty)
-import Control.Monad(replicateM)
+import Data.Bits ((.&.))
+import Data.Monoid ((<>),mempty)
+import Control.Monad (replicateM)
 import qualified Data.Binary.Get as Get
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
@@ -80,10 +80,6 @@ type Pid = E.Pid
 type Port = E.Port
 type Reference = E.Reference
 type Function = E.Function
-
-infixr 4 <>
-(<>) :: Monoid m => m -> m -> m
-(<>) = mappend
 
 -- tag values here http://www.erlang.org/doc/apps/erts/erl_ext_dist.html
 tagVersion :: Word8
