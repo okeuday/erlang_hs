@@ -50,9 +50,9 @@ module Foreign.Erlang
     ) where
 
 import Prelude hiding (length,tail)
-import Data.Bits ((.&.))
-import Data.Monoid (Monoid,mappend,mempty)
-import Control.Monad (replicateM)
+import Data.Bits((.&.))
+import Data.Monoid(Monoid,mappend,mempty)
+import Control.Monad(replicateM)
 import qualified Data.Binary.Get as Get
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
