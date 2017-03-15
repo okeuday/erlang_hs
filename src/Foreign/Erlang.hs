@@ -377,7 +377,11 @@ binaryToTerms = do
             if size1 == 0 || size1 /= size2 then
                 fail $ "compression corrupt"
             else
-                return $ Get.runGet binaryToTerms dataUncompressed
+                case Get.runGetOrFail binaryToTerms dataUncompressed of
+                    Left (_, _, err) ->
+                        fail err
+                    Right (_, _, term) ->
+                        return term
         | otherwise ->
             fail $ "invalid tag"
 
