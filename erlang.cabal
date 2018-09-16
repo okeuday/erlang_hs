@@ -1,5 +1,5 @@
 name:                erlang
-version:             1.7.3
+version:             1.7.4
 synopsis:            Erlang Binary Term Format for Haskell
 description:
   Provides all encoding and decoding for the Erlang Binary Term Format
