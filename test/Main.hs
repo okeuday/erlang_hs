@@ -5,7 +5,7 @@
 
   MIT License
 
-  Copyright (c) 2017 Michael Truog <mjtruog at protonmail dot com>
+  Copyright (c) 2017-2019 Michael Truog <mjtruog at protonmail dot com>
   Copyright (c) 2009-2013, Dmitry Vasiliev <dima@hlabs.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a
@@ -53,21 +53,21 @@ bytes str = Char8.pack str
 duplicate :: Int -> String -> String
 duplicate n str = [1..n] >> str
 
-makePid :: Int -> String -> String -> String -> Int -> OtpErlangTerm
+makePid :: Int -> String -> String -> String -> String -> OtpErlangTerm
 makePid nodeTag node id serial creation =
     Erlang.OtpErlangPid $
         E.Pid (word8 nodeTag) (bytes node)
-            (bytes id) (bytes serial) (word8 creation)
+            (bytes id) (bytes serial) (bytes creation)
 
 makeFunction :: Int -> String -> OtpErlangTerm
 makeFunction tag value =
     Erlang.OtpErlangFunction $
         E.Function (word8 tag) (bytes value)
 
-makeReference :: Int -> String -> String -> Int -> OtpErlangTerm
+makeReference :: Int -> String -> String -> String -> OtpErlangTerm
 makeReference nodeTag node id creation =
     Erlang.OtpErlangReference $
-        E.Reference (word8 nodeTag) (bytes node) (bytes id) (word8 creation)
+        E.Reference (word8 nodeTag) (bytes node) (bytes id) (bytes creation)
 
 termOk :: String -> OtpErlangTerm
 termOk binary =
@@ -98,15 +98,56 @@ testPid =
     let pid1 =
             makePid 100
                 "\x00\x0d\x6e\x6f\x6e\x6f\x64\x65\x40\x6e\x6f\x68\x6f\x73\x74"
-                "\x00\x00\x00\x3b" "\x00\x00\x00\x00" 0
-        binary = "\x83\x67\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F" ++
-                 "\x68\x6F\x73\x74\x00\x00\x00\x3B\x00\x00\x00\x00\x00"
+                "\x00\x00\x00\x3b" "\x00\x00\x00\x00" "\x00"
+        pid2 =
+            makePid 119
+                "\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F\x68\x6F\x73\x74"
+                "\x00\x00\x00\x50" "\x00\x00\x00\x00" "\x00"
+        binary1 =
+            "\x83\x67\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F" ++
+            "\x68\x6F\x73\x74\x00\x00\x00\x3B\x00\x00\x00\x00\x00"
+        binary2 =
+            "\x83\x67\x77\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F\x68" ++
+            "\x6F\x73\x74\x00\x00\x00\x50\x00\x00\x00\x00\x00"
+        pidOldBinary =
+            "\x83\x67\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F" ++
+            "\x68\x6F\x73\x74\x00\x00\x00\x4E\x00\x00\x00\x00\x00"
+        pidOld = termOk $ pidOldBinary
+        pidNewBinary =
+            "\x83\x58\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F\x68" ++
+            "\x6F\x73\x74\x00\x00\x00\x4E\x00\x00\x00\x00\x00\x00\x00\x00"
+        pidNew = termOk $ pidNewBinary
         test1 = TestCase $ assertEqual "pid->binary"
-            (binaryOk $ pid1) binary
+            (binaryOk $ pid1) binary1
         test2 = TestCase $ assertEqual "binary->pid"
-            (termOk $ binary) pid1
+            (termOk $ binary1) pid1
+        test3 = TestCase $ assertEqual "pid->binary"
+            (binaryOk $ pid2) binary2
+        test4 = TestCase $ assertEqual "binary->pid"
+            (termOk $ binary2) pid2
+        test5 = TestCase $ assertEqual "pid->binary"
+            (binaryOk $ pidOld) pidOldBinary
+        test6 = TestCase $ assertEqual "pid->binary"
+            (binaryOk $ pidNew) pidNewBinary
     in
-    TestLabel "testPid" (TestList [test1, test2])
+    TestLabel "testPid" (TestList [test1, test2, test3, test4, test5, test6])
+
+testPort :: Test
+testPort =
+    let portOldBinary =
+            "\x83\x66\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F\x68" ++
+            "\x6F\x73\x74\x00\x00\x00\x06\x00"
+        portOld = termOk $ portOldBinary
+        portNewBinary =
+            "\x83\x59\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F\x68" ++
+            "\x6F\x73\x74\x00\x00\x00\x06\x00\x00\x00\x00"
+        portNew = termOk $ portNewBinary
+        test1 = TestCase $ assertEqual "port->binary"
+            (binaryOk $ portOld) portOldBinary
+        test2 = TestCase $ assertEqual "port->binary"
+            (binaryOk $ portNew) portNewBinary
+    in
+    TestLabel "testPort" (TestList [test1, test2])
 
 testFunction :: Test
 testFunction =
@@ -128,16 +169,31 @@ testReference =
     let reference1 =
             makeReference 100
                 "\x00\x0d\x6e\x6f\x6e\x6f\x64\x65\x40\x6e\x6f\x68\x6f\x73\x74"
-                "\x00\x00\x00\xaf\x00\x00\x00\x03\x00\x00\x00\x00" 0
-        binary = "\x83\x72\x00\x03\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40" ++
-                 "\x6E\x6F\x68\x6F\x73\x74\x00\x00\x00\x00\xAF\x00\x00\x00" ++
-                 "\x03\x00\x00\x00\x00"
+                "\x00\x00\x00\xaf\x00\x00\x00\x03\x00\x00\x00\x00" "\x00"
+        binary =
+            "\x83\x72\x00\x03\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40" ++
+            "\x6E\x6F\x68\x6F\x73\x74\x00\x00\x00\x00\xAF\x00\x00\x00" ++
+            "\x03\x00\x00\x00\x00"
+        refNewBinary =
+            "\x83\x72\x00\x03\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E" ++
+            "\x6F\x68\x6F\x73\x74\x00\x00\x03\xE8\x4E\xE7\x68\x00\x02\xA4" ++
+            "\xC8\x53\x40"
+        refNew = termOk $ refNewBinary
+        refNewerBinary =
+            "\x83\x5A\x00\x03\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E" ++
+            "\x6F\x68\x6F\x73\x74\x00\x00\x00\x00\x00\x01\xAC\x03\xC7\x00" ++
+            "\x00\x04\xBB\xB2\xCA\xEE"
+        refNewer = termOk $ refNewerBinary
         test1 = TestCase $ assertEqual "reference->binary"
             (binaryOk $ reference1) binary
         test2 = TestCase $ assertEqual "binary->reference"
             (termOk $ binary) reference1
+        test3 = TestCase $ assertEqual "reference->binary"
+            (binaryOk $ refNew) refNewBinary
+        test4 = TestCase $ assertEqual "reference->binary"
+            (binaryOk $ refNewer) refNewerBinary
     in
-    TestLabel "testReference" (TestList [test1, test2])
+    TestLabel "testReference" (TestList [test1, test2, test3, test4])
 
 testDecodeBasic :: Test
 testDecodeBasic =
@@ -912,6 +968,7 @@ main :: IO Counts
 main = do
     results <- runTestTT $ TestList [
           testPid
+        , testPort
         , testFunction
         , testReference
         , testDecodeBasic
