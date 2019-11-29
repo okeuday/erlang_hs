@@ -18,6 +18,11 @@ cabal-version:       >= 1.10
 tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.1, GHC == 8.2.2, GHC == 8.4.3
 extra-source-files:  README.markdown
 
+flag dev
+  description:        Turn on development settings.
+  manual:             True
+  default:            False
+
 library
   hs-source-dirs:      src
   exposed-modules:     Foreign.Erlang
@@ -25,18 +30,16 @@ library
                      , Foreign.Erlang.Port
                      , Foreign.Erlang.Reference
                      , Foreign.Erlang.Function
-  ghc-options:         -Wall -funbox-strict-fields
+  if flag(dev)
+    ghc-options:       -Wall -Werror -funbox-strict-fields
+  else
+    ghc-options:       -Wall -funbox-strict-fields
   build-depends:       base >= 4.6.0.1 && < 5.0
                      , binary >= 0.8.4.0
                      , bytestring >= 0.10.4
                      , containers
                      , zlib
   default-language:    Haskell2010
-
-flag dev
-  description:        Turn on development settings.
-  manual:             True
-  default:            False
 
 Test-Suite test-erlang
   type:                exitcode-stdio-1.0
