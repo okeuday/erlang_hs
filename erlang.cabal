@@ -26,12 +26,17 @@ library
                      , Foreign.Erlang.Reference
                      , Foreign.Erlang.Function
   ghc-options:         -Wall -funbox-strict-fields
-  build-depends:       base >= 4.6.0.1
+  build-depends:       base >= 4.6.0.1 && < 5.0
                      , binary >= 0.8.4.0
                      , bytestring >= 0.10.4
                      , containers
                      , zlib
   default-language:    Haskell2010
+
+flag dev
+  description:        Turn on development settings.
+  manual:             True
+  default:            False
 
 Test-Suite test-erlang
   type:                exitcode-stdio-1.0
@@ -44,7 +49,10 @@ Test-Suite test-erlang
                      , test-framework-hunit
                      , zlib
                      , HUnit
-  ghc-options:         -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
+  if flag(dev)
+    ghc-options:       -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
+  else
+    ghc-options:       -Wall -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 source-repository head
