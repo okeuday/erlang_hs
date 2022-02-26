@@ -5,7 +5,7 @@
 
   MIT License
 
-  Copyright (c) 2017-2019 Michael Truog <mjtruog at protonmail dot com>
+  Copyright (c) 2017-2022 Michael Truog <mjtruog at protonmail dot com>
   Copyright (c) 2009-2013, Dmitry Vasiliev <dima@hlabs.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a
@@ -221,32 +221,45 @@ testDecodeAtom =
             (termError $ "\x83\x64\x00\x01")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode atom 4"
+            (termOk $ "\x83\x76\x00\x00")
+            (Erlang.OtpErlangAtomUTF8 (bytes ""))
+        test5 = TestCase $ assertEqual "decode atom 5"
             (termOk $ "\x83\x64\x00\x00")
             (Erlang.OtpErlangAtom (bytes ""))
-        test5 = TestCase $ assertEqual "decode atom 5"
+        test6 = TestCase $ assertEqual "decode atom 6"
+            (termOk $ "\x83\x77\x00")
+            (Erlang.OtpErlangAtomUTF8 (bytes ""))
+        test7 = TestCase $ assertEqual "decode atom 7"
             (termOk $ "\x83\x73\x00")
             (Erlang.OtpErlangAtom (bytes ""))
-        test6 = TestCase $ assertEqual "decode atom 6"
+        test8 = TestCase $ assertEqual "decode atom 8"
+            (termOk $ "\x83\x76\x00\x04\&test")
+            (Erlang.OtpErlangAtomUTF8 (bytes "test"))
+        test9 = TestCase $ assertEqual "decode atom 9"
             (termOk $ "\x83\x64\x00\x04\&test")
             (Erlang.OtpErlangAtom (bytes "test"))
-        test7 = TestCase $ assertEqual "decode atom 7"
+        test10 = TestCase $ assertEqual "decode atom 10"
+            (termOk $ "\x83\x77\x04\&test")
+            (Erlang.OtpErlangAtomUTF8 (bytes "test"))
+        test11 = TestCase $ assertEqual "decode atom 11"
             (termOk $ "\x83\x73\x04\&test")
             (Erlang.OtpErlangAtom (bytes "test"))
     in
     TestLabel "testDecodeAtom"
-        (TestList [test1, test2, test3, test4, test5, test6, test7])
+        (TestList [test1, test2, test3, test4, test5, test6, test7, test8,
+            test9, test10, test11])
 
 testDecodePredefinedAtom :: Test
 testDecodePredefinedAtom =
     let test1 = TestCase $ assertEqual "decode predefined atom 1"
-            (termOk $ "\x83\x73\x04\&true")
+            (termOk $ "\x83\x77\x04\&true")
             (Erlang.OtpErlangAtomBool (True))
         test2 = TestCase $ assertEqual "decode predefined atom 2"
-            (termOk $ "\x83\x73\x05\&false")
+            (termOk $ "\x83\x77\x05\&false")
             (Erlang.OtpErlangAtomBool (False))
         test3 = TestCase $ assertEqual "decode predefined atom 3"
-            (termOk $ "\x83\x73\x09\&undefined")
-            (Erlang.OtpErlangAtom (bytes "undefined"))
+            (termOk $ "\x83\x77\x09\&undefined")
+            (Erlang.OtpErlangAtomUTF8 (bytes "undefined"))
     in
     TestLabel "testDecodePredefinedAtom" (TestList [test1, test2, test3])
 
@@ -313,10 +326,10 @@ testDecodeImproperList =
             (termError $ "\x83\x6c\x00\x00\x00\x00\x6b")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode improper list 2"
-            (termOk $ "\x83\x6c\x00\x00\x00\x01\x6a\x64\x00\x04\&tail")
+            (termOk $ "\x83\x6c\x00\x00\x00\x01\x6a\x76\x00\x04\&tail")
             (Erlang.OtpErlangListImproper ([
                 Erlang.OtpErlangList ([]),
-                Erlang.OtpErlangAtom (bytes "tail")]))
+                Erlang.OtpErlangAtomUTF8 (bytes "tail")]))
     in
     TestLabel "testDecodeImproperList" (TestList [test1, test2])
 
@@ -778,13 +791,19 @@ testEncodeUnicode =
 testEncodeAtom :: Test
 testEncodeAtom =
     let test1 = TestCase $ assertEqual "encode atom 1"
+            (binaryOk $ Erlang.OtpErlangAtomUTF8 (bytes ""))
+            "\x83\x77\x00"
+        test2 = TestCase $ assertEqual "encode atom 2"
             (binaryOk $ Erlang.OtpErlangAtom (bytes ""))
             "\x83\x73\x00"
-        test2 = TestCase $ assertEqual "encode atom 2"
+        test3 = TestCase $ assertEqual "encode atom 3"
+            (binaryOk $ Erlang.OtpErlangAtomUTF8 (bytes "test"))
+            "\x83\x77\x04\&test"
+        test4 = TestCase $ assertEqual "encode atom 4"
             (binaryOk $ Erlang.OtpErlangAtom (bytes "test"))
             "\x83\x73\x04\&test"
     in
-    TestLabel "testEncodeAtom" (TestList [test1, test2])
+    TestLabel "testEncodeAtom" (TestList [test1, test2, test3, test4])
 
 testEncodeStringBasic :: Test
 testEncodeStringBasic =
@@ -847,10 +866,10 @@ testEncodeBoolean :: Test
 testEncodeBoolean =
     let test1 = TestCase $ assertEqual "encode boolean 1"
             (binaryOk $ Erlang.OtpErlangAtomBool (True))
-            "\x83\x73\x04\&true"
+            "\x83\x77\x04\&true"
         test2 = TestCase $ assertEqual "encode boolean 2"
             (binaryOk $ Erlang.OtpErlangAtomBool (False))
-            "\x83\x73\x05\&false"
+            "\x83\x77\x05\&false"
     in
     TestLabel "testEncodeBoolean" (TestList [test1, test2])
 
