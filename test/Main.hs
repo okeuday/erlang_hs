@@ -5,7 +5,7 @@
 
   MIT License
 
-  Copyright (c) 2017-2022 Michael Truog <mjtruog at protonmail dot com>
+  Copyright (c) 2017-2023 Michael Truog <mjtruog at protonmail dot com>
   Copyright (c) 2009-2013, Dmitry Vasiliev <dima@hlabs.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a
@@ -35,11 +35,12 @@ import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as LazyByteString
 import qualified Data.ByteString.Lazy.Char8 as LazyChar8
+import qualified Data.Map.Strict as Map
 import qualified Data.Word as Word
 import qualified Foreign.Erlang as Erlang
 import qualified Foreign.Erlang.Pid as E
-import qualified Foreign.Erlang.Function as E
 import qualified Foreign.Erlang.Reference as E
+import qualified Foreign.Erlang.Function as E
 type ByteString = ByteString.ByteString
 type Word8 = Word.Word8
 type OtpErlangTerm = Erlang.OtpErlangTerm
@@ -59,15 +60,15 @@ makePid nodeTag node id serial creation =
         E.Pid (word8 nodeTag) (bytes node)
             (bytes id) (bytes serial) (bytes creation)
 
-makeFunction :: Int -> String -> OtpErlangTerm
-makeFunction tag value =
-    Erlang.OtpErlangFunction $
-        E.Function (word8 tag) (bytes value)
-
 makeReference :: Int -> String -> String -> String -> OtpErlangTerm
 makeReference nodeTag node id creation =
     Erlang.OtpErlangReference $
         E.Reference (word8 nodeTag) (bytes node) (bytes id) (bytes creation)
+
+makeFunction :: Int -> String -> OtpErlangTerm
+makeFunction tag value =
+    Erlang.OtpErlangFunction $
+        E.Function (word8 tag) (bytes value)
 
 termOk :: String -> OtpErlangTerm
 termOk binary =
@@ -112,23 +113,23 @@ testPid =
         pidOldBinary =
             "\x83\x67\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F" ++
             "\x68\x6F\x73\x74\x00\x00\x00\x4E\x00\x00\x00\x00\x00"
-        pidOld = termOk $ pidOldBinary
+        pidOld = termOk pidOldBinary
         pidNewBinary =
             "\x83\x58\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F\x68" ++
             "\x6F\x73\x74\x00\x00\x00\x4E\x00\x00\x00\x00\x00\x00\x00\x00"
-        pidNew = termOk $ pidNewBinary
+        pidNew = termOk pidNewBinary
         test1 = TestCase $ assertEqual "pid->binary"
-            (binaryOk $ pid1) binary1
+            (binaryOk pid1) binary1
         test2 = TestCase $ assertEqual "binary->pid"
-            (termOk $ binary1) pid1
+            (termOk binary1) pid1
         test3 = TestCase $ assertEqual "pid->binary"
-            (binaryOk $ pid2) binary2
+            (binaryOk pid2) binary2
         test4 = TestCase $ assertEqual "binary->pid"
-            (termOk $ binary2) pid2
+            (termOk binary2) pid2
         test5 = TestCase $ assertEqual "pid->binary"
-            (binaryOk $ pidOld) pidOldBinary
+            (binaryOk pidOld) pidOldBinary
         test6 = TestCase $ assertEqual "pid->binary"
-            (binaryOk $ pidNew) pidNewBinary
+            (binaryOk pidNew) pidNewBinary
     in
     TestLabel "testPid" (TestList [test1, test2, test3, test4, test5, test6])
 
@@ -137,32 +138,23 @@ testPort =
     let portOldBinary =
             "\x83\x66\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F\x68" ++
             "\x6F\x73\x74\x00\x00\x00\x06\x00"
-        portOld = termOk $ portOldBinary
+        portOld = termOk portOldBinary
         portNewBinary =
             "\x83\x59\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F\x68" ++
             "\x6F\x73\x74\x00\x00\x00\x06\x00\x00\x00\x00"
-        portNew = termOk $ portNewBinary
+        portNew = termOk portNewBinary
+        portV4Binary =
+            "\x83\x78\x77\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E\x6F\x68\x6F" ++
+            "\x73\x74\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00"
+        portV4 = termOk portV4Binary
         test1 = TestCase $ assertEqual "port->binary"
-            (binaryOk $ portOld) portOldBinary
+            (binaryOk portOld) portOldBinary
         test2 = TestCase $ assertEqual "port->binary"
-            (binaryOk $ portNew) portNewBinary
+            (binaryOk portNew) portNewBinary
+        test3 = TestCase $ assertEqual "port->binary"
+            (binaryOk portV4) portV4Binary
     in
-    TestLabel "testPort" (TestList [test1, test2])
-
-testFunction :: Test
-testFunction =
-    let function1 =
-            makeFunction 113
-                ("\x64\x00\x05\x6c\x69\x73\x74\x73\x64" ++
-                 "\x00\x06\x6d\x65\x6d\x62\x65\x72\x61\x02")
-        binary = "\x83\x71\x64\x00\x05\x6C\x69\x73\x74\x73\x64\x00\x06\x6D" ++
-                 "\x65\x6D\x62\x65\x72\x61\x02"
-        test1 = TestCase $ assertEqual "function->binary"
-            (binaryOk $ function1) binary
-        test2 = TestCase $ assertEqual "binary->function"
-            (termOk $ binary) function1
-    in
-    TestLabel "testFunction" (TestList [test1, test2])
+    TestLabel "testPort" (TestList [test1, test2, test3])
 
 testReference :: Test
 testReference =
@@ -178,33 +170,48 @@ testReference =
             "\x83\x72\x00\x03\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E" ++
             "\x6F\x68\x6F\x73\x74\x00\x00\x03\xE8\x4E\xE7\x68\x00\x02\xA4" ++
             "\xC8\x53\x40"
-        refNew = termOk $ refNewBinary
+        refNew = termOk refNewBinary
         refNewerBinary =
             "\x83\x5A\x00\x03\x64\x00\x0D\x6E\x6F\x6E\x6F\x64\x65\x40\x6E" ++
             "\x6F\x68\x6F\x73\x74\x00\x00\x00\x00\x00\x01\xAC\x03\xC7\x00" ++
             "\x00\x04\xBB\xB2\xCA\xEE"
-        refNewer = termOk $ refNewerBinary
+        refNewer = termOk refNewerBinary
         test1 = TestCase $ assertEqual "reference->binary"
-            (binaryOk $ reference1) binary
+            (binaryOk reference1) binary
         test2 = TestCase $ assertEqual "binary->reference"
-            (termOk $ binary) reference1
+            (termOk binary) reference1
         test3 = TestCase $ assertEqual "reference->binary"
-            (binaryOk $ refNew) refNewBinary
+            (binaryOk refNew) refNewBinary
         test4 = TestCase $ assertEqual "reference->binary"
-            (binaryOk $ refNewer) refNewerBinary
+            (binaryOk refNewer) refNewerBinary
     in
     TestLabel "testReference" (TestList [test1, test2, test3, test4])
+
+testFunction :: Test
+testFunction =
+    let function1 =
+            makeFunction 113
+                ("\x64\x00\x05\x6c\x69\x73\x74\x73\x64" ++
+                 "\x00\x06\x6d\x65\x6d\x62\x65\x72\x61\x02")
+        binary = "\x83\x71\x64\x00\x05\x6C\x69\x73\x74\x73\x64\x00\x06\x6D" ++
+                 "\x65\x6D\x62\x65\x72\x61\x02"
+        test1 = TestCase $ assertEqual "function->binary"
+            (binaryOk function1) binary
+        test2 = TestCase $ assertEqual "binary->function"
+            (termOk binary) function1
+    in
+    TestLabel "testFunction" (TestList [test1, test2])
 
 testDecodeBasic :: Test
 testDecodeBasic =
     let test1 = TestCase $ assertEqual "decode basic 1"
-            (termError $ "")
+            (termError "")
             "ParseError \"null input\""
         test2 = TestCase $ assertEqual "decode basic 2"
-            (termError $ "\x83")
+            (termError "\x83")
             "ParseError \"null input\""
         test3 = TestCase $ assertEqual "decode basic 3"
-            (termError $ "\x83\x7a")
+            (termError "\x83\x7a")
             "ParseError \"invalid tag\""
     in
     TestLabel "testDecodeBasic" (TestList [test1, test2, test3])
@@ -212,37 +219,37 @@ testDecodeBasic =
 testDecodeAtom :: Test
 testDecodeAtom =
     let test1 = TestCase $ assertEqual "decode atom 1"
-            (termError $ "\x83\x64")
+            (termError "\x83\x64")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode atom 2"
-            (termError $ "\x83\x64\x00")
+            (termError "\x83\x64\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode atom 3"
-            (termError $ "\x83\x64\x00\x01")
+            (termError "\x83\x64\x00\x01")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode atom 4"
-            (termOk $ "\x83\x76\x00\x00")
+            (termOk "\x83\x76\x00\x00")
             (Erlang.OtpErlangAtomUTF8 (bytes ""))
         test5 = TestCase $ assertEqual "decode atom 5"
-            (termOk $ "\x83\x64\x00\x00")
+            (termOk "\x83\x64\x00\x00")
             (Erlang.OtpErlangAtom (bytes ""))
         test6 = TestCase $ assertEqual "decode atom 6"
-            (termOk $ "\x83\x77\x00")
+            (termOk "\x83\x77\x00")
             (Erlang.OtpErlangAtomUTF8 (bytes ""))
         test7 = TestCase $ assertEqual "decode atom 7"
-            (termOk $ "\x83\x73\x00")
+            (termOk "\x83\x73\x00")
             (Erlang.OtpErlangAtom (bytes ""))
         test8 = TestCase $ assertEqual "decode atom 8"
-            (termOk $ "\x83\x76\x00\x04\&test")
+            (termOk "\x83\x76\x00\x04\&test")
             (Erlang.OtpErlangAtomUTF8 (bytes "test"))
         test9 = TestCase $ assertEqual "decode atom 9"
-            (termOk $ "\x83\x64\x00\x04\&test")
+            (termOk "\x83\x64\x00\x04\&test")
             (Erlang.OtpErlangAtom (bytes "test"))
         test10 = TestCase $ assertEqual "decode atom 10"
-            (termOk $ "\x83\x77\x04\&test")
+            (termOk "\x83\x77\x04\&test")
             (Erlang.OtpErlangAtomUTF8 (bytes "test"))
         test11 = TestCase $ assertEqual "decode atom 11"
-            (termOk $ "\x83\x73\x04\&test")
+            (termOk "\x83\x73\x04\&test")
             (Erlang.OtpErlangAtom (bytes "test"))
     in
     TestLabel "testDecodeAtom"
@@ -252,13 +259,13 @@ testDecodeAtom =
 testDecodePredefinedAtom :: Test
 testDecodePredefinedAtom =
     let test1 = TestCase $ assertEqual "decode predefined atom 1"
-            (termOk $ "\x83\x77\x04\&true")
+            (termOk "\x83\x77\x04\&true")
             (Erlang.OtpErlangAtomBool (True))
         test2 = TestCase $ assertEqual "decode predefined atom 2"
-            (termOk $ "\x83\x77\x05\&false")
+            (termOk "\x83\x77\x05\&false")
             (Erlang.OtpErlangAtomBool (False))
         test3 = TestCase $ assertEqual "decode predefined atom 3"
-            (termOk $ "\x83\x77\x09\&undefined")
+            (termOk "\x83\x77\x09\&undefined")
             (Erlang.OtpErlangAtomUTF8 (bytes "undefined"))
     in
     TestLabel "testDecodePredefinedAtom" (TestList [test1, test2, test3])
@@ -266,7 +273,7 @@ testDecodePredefinedAtom =
 testDecodeEmptyList :: Test
 testDecodeEmptyList =
     let test1 = TestCase $ assertEqual "decode empty list 1"
-            (termOk $ "\x83\x6a")
+            (termOk "\x83\x6a")
             (Erlang.OtpErlangList ([]))
     in
     TestLabel "testDecodeEmptyList" (TestList [test1])
@@ -274,19 +281,19 @@ testDecodeEmptyList =
 testDecodeStringList :: Test
 testDecodeStringList =
     let test1 = TestCase $ assertEqual "decode string list 1"
-            (termError $ "\x83\x6b")
+            (termError "\x83\x6b")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode string list 2"
-            (termError $ "\x83\x6b\x00")
+            (termError "\x83\x6b\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode string list 3"
-            (termError $ "\x83\x6b\x00\x01")
+            (termError "\x83\x6b\x00\x01")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode string list 4"
-            (termOk $ "\x83\x6b\x00\x00")
+            (termOk "\x83\x6b\x00\x00")
             (Erlang.OtpErlangString (bytes ""))
         test5 = TestCase $ assertEqual "decode string list 5"
-            (termOk $ "\x83\x6b\x00\x04\&test")
+            (termOk "\x83\x6b\x00\x04\&test")
             (Erlang.OtpErlangString (bytes "test"))
     in
     TestLabel "testDecodeStringList"
@@ -295,25 +302,25 @@ testDecodeStringList =
 testDecodeList :: Test
 testDecodeList =
     let test1 = TestCase $ assertEqual "decode list 1"
-            (termError $ "\x83\x6c")
+            (termError "\x83\x6c")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode list 2"
-            (termError $ "\x83\x6c\x00")
+            (termError "\x83\x6c\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode list 3"
-            (termError $ "\x83\x6c\x00\x00")
+            (termError "\x83\x6c\x00\x00")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode list 4"
-            (termError $ "\x83\x6c\x00\x00\x00")
+            (termError "\x83\x6c\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test5 = TestCase $ assertEqual "decode list 5"
-            (termError $ "\x83\x6c\x00\x00\x00\x00")
+            (termError "\x83\x6c\x00\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test6 = TestCase $ assertEqual "decode list 6"
-            (termOk $ "\x83\x6c\x00\x00\x00\x00\x6a")
+            (termOk "\x83\x6c\x00\x00\x00\x00\x6a")
             (Erlang.OtpErlangList ([]))
         test7 = TestCase $ assertEqual "decode list 7"
-            (termOk $ "\x83\x6c\x00\x00\x00\x02\x6a\x6a\x6a")
+            (termOk "\x83\x6c\x00\x00\x00\x02\x6a\x6a\x6a")
             (Erlang.OtpErlangList ([
                 Erlang.OtpErlangList ([]), Erlang.OtpErlangList ([])]))
     in
@@ -323,10 +330,10 @@ testDecodeList =
 testDecodeImproperList :: Test
 testDecodeImproperList =
     let test1 = TestCase $ assertEqual "decode improper list 1"
-            (termError $ "\x83\x6c\x00\x00\x00\x00\x6b")
+            (termError "\x83\x6c\x00\x00\x00\x00\x6b")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode improper list 2"
-            (termOk $ "\x83\x6c\x00\x00\x00\x01\x6a\x76\x00\x04\&tail")
+            (termOk "\x83\x6c\x00\x00\x00\x01\x6a\x76\x00\x04\&tail")
             (Erlang.OtpErlangListImproper ([
                 Erlang.OtpErlangList ([]),
                 Erlang.OtpErlangAtomUTF8 (bytes "tail")]))
@@ -336,16 +343,16 @@ testDecodeImproperList =
 testDecodeSmallTuple :: Test
 testDecodeSmallTuple =
     let test1 = TestCase $ assertEqual "decode small tuple 1"
-            (termError $ "\x83\x68")
+            (termError "\x83\x68")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode small tuple 2"
-            (termError $ "\x83\x68\x01")
+            (termError "\x83\x68\x01")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode small tuple 3"
-            (termOk $ "\x83\x68\x00")
+            (termOk "\x83\x68\x00")
             (Erlang.OtpErlangTuple ([]))
         test4 = TestCase $ assertEqual "decode small tuple 4"
-            (termOk $ "\x83\x68\x02\x6a\x6a")
+            (termOk "\x83\x68\x02\x6a\x6a")
             (Erlang.OtpErlangTuple ([
                 Erlang.OtpErlangList ([]),
                 Erlang.OtpErlangList ([])]))
@@ -355,25 +362,25 @@ testDecodeSmallTuple =
 testDecodeLargeTuple :: Test
 testDecodeLargeTuple =
     let test1 = TestCase $ assertEqual "decode large tuple 1"
-            (termError $ "\x83\x69")
+            (termError "\x83\x69")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode large tuple 2"
-            (termError $ "\x83\x69\x00")
+            (termError "\x83\x69\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode large tuple 3"
-            (termError $ "\x83\x69\x00\x00")
+            (termError "\x83\x69\x00\x00")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode large tuple 4"
-            (termError $ "\x83\x69\x00\x00\x00")
+            (termError "\x83\x69\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test5 = TestCase $ assertEqual "decode large tuple 5"
-            (termError $ "\x83\x69\x00\x00\x00\x01")
+            (termError "\x83\x69\x00\x00\x00\x01")
             "ParseError \"not enough bytes\""
         test6 = TestCase $ assertEqual "decode large tuple 6"
-            (termOk $ "\x83\x69\x00\x00\x00\x00")
+            (termOk "\x83\x69\x00\x00\x00\x00")
             (Erlang.OtpErlangTuple ([]))
         test7 = TestCase $ assertEqual "decode large tuple 7"
-            (termOk $ "\x83\x69\x00\x00\x00\x02\x6a\x6a")
+            (termOk "\x83\x69\x00\x00\x00\x02\x6a\x6a")
             (Erlang.OtpErlangTuple ([
                 Erlang.OtpErlangList ([]),
                 Erlang.OtpErlangList ([])]))
@@ -384,13 +391,13 @@ testDecodeLargeTuple =
 testDecodeSmallInteger :: Test
 testDecodeSmallInteger =
     let test1 = TestCase $ assertEqual "decode small integer 1"
-            (termError $ "\x83\x61")
+            (termError "\x83\x61")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode small integer 2"
-            (termOk $ "\x83\x61\x00")
+            (termOk "\x83\x61\x00")
             (Erlang.OtpErlangInteger (0))
         test3 = TestCase $ assertEqual "decode small integer 3"
-            (termOk $ "\x83\x61\xff")
+            (termOk "\x83\x61\xff")
             (Erlang.OtpErlangInteger (255))
     in
     TestLabel "testDecodeSmallInteger" (TestList [test1, test2, test3])
@@ -398,31 +405,31 @@ testDecodeSmallInteger =
 testDecodeInteger :: Test
 testDecodeInteger =
     let test1 = TestCase $ assertEqual "decode integer 1"
-            (termError $ "\x83\x62")
+            (termError "\x83\x62")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode integer 2"
-            (termError $ "\x83\x62\x00")
+            (termError "\x83\x62\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode integer 3"
-            (termError $ "\x83\x62\x00\x00")
+            (termError "\x83\x62\x00\x00")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode integer 4"
-            (termError $ "\x83\x62\x00\x00\x00")
+            (termError "\x83\x62\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test5 = TestCase $ assertEqual "decode integer 5"
-            (termOk $ "\x83\x62\x00\x00\x00\x00")
+            (termOk "\x83\x62\x00\x00\x00\x00")
             (Erlang.OtpErlangInteger (0))
         test6 = TestCase $ assertEqual "decode integer 6"
-            (termOk $ "\x83\x62\x7f\xff\xff\xff")
+            (termOk "\x83\x62\x7f\xff\xff\xff")
             (Erlang.OtpErlangInteger (2147483647))
         test7 = TestCase $ assertEqual "decode integer 7"
-            (termOk $ "\x83\x62\x80\x00\x00\x00")
+            (termOk "\x83\x62\x80\x00\x00\x00")
             (Erlang.OtpErlangInteger (-2147483648))
         test8 = TestCase $ assertEqual "decode integer 8"
-            (termOk $ "\x83\x62\xff\xff\xff\xff")
+            (termOk "\x83\x62\xff\xff\xff\xff")
             (Erlang.OtpErlangInteger (-1))
         test9 = TestCase $ assertEqual "decode integer 9"
-            (termOk $ "\x83\x6e\x08\x00\x00\x00\x00\x00\x00\x00\x00\x40")
+            (termOk "\x83\x6e\x08\x00\x00\x00\x00\x00\x00\x00\x00\x40")
             (Erlang.OtpErlangIntegerBig (4611686018427387904))
     in
     TestLabel "testDecodeInteger"
@@ -432,25 +439,25 @@ testDecodeInteger =
 testDecodeBinary :: Test
 testDecodeBinary =
     let test1 = TestCase $ assertEqual "decode binary 1"
-            (termError $ "\x83\x6d")
+            (termError "\x83\x6d")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode binary 2"
-            (termError $ "\x83\x6d\x00")
+            (termError "\x83\x6d\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode binary 3"
-            (termError $ "\x83\x6d\x00\x00")
+            (termError "\x83\x6d\x00\x00")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode binary 4"
-            (termError $ "\x83\x6d\x00\x00\x00")
+            (termError "\x83\x6d\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test5 = TestCase $ assertEqual "decode binary 5"
-            (termError $ "\x83\x6d\x00\x00\x00\x01")
+            (termError "\x83\x6d\x00\x00\x00\x01")
             "ParseError \"not enough bytes\""
         test6 = TestCase $ assertEqual "decode binary 6"
-            (termOk $ "\x83\x6d\x00\x00\x00\x00")
+            (termOk "\x83\x6d\x00\x00\x00\x00")
             (Erlang.OtpErlangBinary (ByteString.empty))
         test7 = TestCase $ assertEqual "decode binary 7"
-            (termOk $ "\x83\x6d\x00\x00\x00\x04\&data")
+            (termOk "\x83\x6d\x00\x00\x00\x04\&data")
             (Erlang.OtpErlangBinary (bytes "data"))
     in
     TestLabel "testDecodeBinary"
@@ -459,34 +466,34 @@ testDecodeBinary =
 testDecodeFloat :: Test
 testDecodeFloat =
     let test1 = TestCase $ assertEqual "decode float 1"
-            (termError $ "\x83\x46")
+            (termError "\x83\x46")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode float 2"
-            (termError $ "\x83\x46\x00")
+            (termError "\x83\x46\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode float 3"
-            (termError $ "\x83\x46\x00\x00")
+            (termError "\x83\x46\x00\x00")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode float 4"
-            (termError $ "\x83\x46\x00\x00\x00")
+            (termError "\x83\x46\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test5 = TestCase $ assertEqual "decode float 5"
-            (termError $ "\x83\x46\x00\x00\x00\x00")
+            (termError "\x83\x46\x00\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test6 = TestCase $ assertEqual "decode float 6"
-            (termError $ "\x83\x46\x00\x00\x00\x00\x00")
+            (termError "\x83\x46\x00\x00\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test7 = TestCase $ assertEqual "decode float 7"
-            (termError $ "\x83\x46\x00\x00\x00\x00\x00\x00")
+            (termError "\x83\x46\x00\x00\x00\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test8 = TestCase $ assertEqual "decode float 8"
-            (termError $ "\x83\x46\x00\x00\x00\x00\x00\x00\x00")
+            (termError "\x83\x46\x00\x00\x00\x00\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test9 = TestCase $ assertEqual "decode float 9"
-            (termOk $ "\x83\x46\x00\x00\x00\x00\x00\x00\x00\x00")
+            (termOk "\x83\x46\x00\x00\x00\x00\x00\x00\x00\x00")
             (Erlang.OtpErlangFloat (0.0))
         test10 = TestCase $ assertEqual "decode float 10"
-            (termOk $ "\x83\x46\x3f\xf8\x00\x00\x00\x00\x00\x00")
+            (termOk "\x83\x46\x3f\xf8\x00\x00\x00\x00\x00\x00")
             (Erlang.OtpErlangFloat (1.5))
     in
     TestLabel "testDecodeFloat"
@@ -496,22 +503,22 @@ testDecodeFloat =
 testDecodeSmallBigInteger :: Test
 testDecodeSmallBigInteger =
     let test1 = TestCase $ assertEqual "decode small big integer 1"
-            (termError $ "\x83\x6e")
+            (termError "\x83\x6e")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode small big integer 2"
-            (termError $ "\x83\x6e\x00")
+            (termError "\x83\x6e\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode small big integer 3"
-            (termError $ "\x83\x6e\x01\x00")
+            (termError "\x83\x6e\x01\x00")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode small big integer 4"
-            (termOk $ "\x83\x6e\x00\x00")
+            (termOk "\x83\x6e\x00\x00")
             (Erlang.OtpErlangIntegerBig (0))
         test5 = TestCase $ assertEqual "decode small big integer 5"
-            (termOk $ "\x83\x6e\x06\x00\x01\x02\x03\x04\x05\x06")
+            (termOk "\x83\x6e\x06\x00\x01\x02\x03\x04\x05\x06")
             (Erlang.OtpErlangIntegerBig (6618611909121))
         test6 = TestCase $ assertEqual "decode small big integer 6"
-            (termOk $ "\x83\x6e\x06\x01\x01\x02\x03\x04\x05\x06")
+            (termOk "\x83\x6e\x06\x01\x01\x02\x03\x04\x05\x06")
             (Erlang.OtpErlangIntegerBig (-6618611909121))
     in
     TestLabel "testDecodeSmallBigInteger"
@@ -520,62 +527,104 @@ testDecodeSmallBigInteger =
 testDecodeLargeBigInteger :: Test
 testDecodeLargeBigInteger =
     let test1 = TestCase $ assertEqual "decode large big integer 1"
-            (termError $ "\x83\x6f")
+            (termError "\x83\x6f")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode large big integer 2"
-            (termError $ "\x83\x6f\x00")
+            (termError "\x83\x6f\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode large big integer 3"
-            (termError $ "\x83\x6f\x00\x00")
+            (termError "\x83\x6f\x00\x00")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode large big integer 4"
-            (termError $ "\x83\x6f\x00\x00\x00")
+            (termError "\x83\x6f\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test5 = TestCase $ assertEqual "decode large big integer 5"
-            (termError $ "\x83\x6f\x00\x00\x00\x00")
+            (termError "\x83\x6f\x00\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test6 = TestCase $ assertEqual "decode large big integer 6"
-            (termError $ "\x83\x6f\x00\x00\x00\x01\x00")
+            (termError "\x83\x6f\x00\x00\x00\x01\x00")
             "ParseError \"not enough bytes\""
         test7 = TestCase $ assertEqual "decode large big integer 7"
-            (termOk $ "\x83\x6f\x00\x00\x00\x00\x00")
+            (termOk "\x83\x6f\x00\x00\x00\x00\x00")
             (Erlang.OtpErlangIntegerBig (0))
         test8 = TestCase $ assertEqual "decode large big integer 8"
-            (termOk $ "\x83\x6f\x00\x00\x00\x06\x00\x01\x02\x03\x04\x05\x06")
+            (termOk "\x83\x6f\x00\x00\x00\x06\x00\x01\x02\x03\x04\x05\x06")
             (Erlang.OtpErlangIntegerBig (6618611909121))
         test9 = TestCase $ assertEqual "decode large big integer 9"
-            (termOk $ "\x83\x6f\x00\x00\x00\x06\x01\x01\x02\x03\x04\x05\x06")
+            (termOk "\x83\x6f\x00\x00\x00\x06\x01\x01\x02\x03\x04\x05\x06")
             (Erlang.OtpErlangIntegerBig (-6618611909121))
     in
     TestLabel "testDecodeLargeBigInteger"
         (TestList [test1, test2, test3, test4, test5, test6, test7,
             test8, test9])
 
+testDecodeMap :: Test
+testDecodeMap =
+    let test1 = TestCase $ assertEqual "decode map 1"
+            (termError "\x83\x74")
+            "ParseError \"not enough bytes\""
+        test2 = TestCase $ assertEqual "decode map 2"
+            (termError "\x83\x74\x00")
+            "ParseError \"not enough bytes\""
+        test3 = TestCase $ assertEqual "decode map 3"
+            (termError "\x83\x74\x00\x00")
+            "ParseError \"not enough bytes\""
+        test4 = TestCase $ assertEqual "decode map 4"
+            (termError "\x83\x74\x00\x00\x00")
+            "ParseError \"not enough bytes\""
+        test5 = TestCase $ assertEqual "decode map 5"
+            (termError "\x83\x74\x00\x00\x00\x01")
+            "ParseError \"not enough bytes\""
+        test6 = TestCase $ assertEqual "decode map 6"
+            (termOk "\x83\x74\x00\x00\x00\x00")
+            (Erlang.OtpErlangMap (Map.empty))
+        map1 = Erlang.OtpErlangMap (Map.fromList [
+            (Erlang.OtpErlangAtom (bytes "a"), Erlang.OtpErlangInteger (1))])
+        test7 = TestCase $ assertEqual "decode map 7"
+            (termOk "\x83\x74\x00\x00\x00\x01\x64\x00\x01\x61\x61\x01")
+            map1
+        map2 = Erlang.OtpErlangMap (Map.fromList [
+            (Erlang.OtpErlangBinaryBits ((bytes "\xA8"), 6),
+             Erlang.OtpErlangBinary (bytes "everything")),
+            (Erlang.OtpErlangAtomUTF8 (bytes "undefined"),
+             Erlang.OtpErlangBinary (bytes "nothing"))])
+        test8 = TestCase $ assertEqual "decode map 8"
+            (termOk
+             ("\x83\x74\x00\x00\x00\x02\x77\x09\x75\x6E\x64\x65\x66" ++
+              "\x69\x6E\x65\x64\x6D\x00\x00\x00\x07\x6E\x6F\x74\x68" ++
+              "\x69\x6E\x67\x4D\x00\x00\x00\x01\x06\xA8\x6D\x00\x00" ++
+              "\x00\x0A\x65\x76\x65\x72\x79\x74\x68\x69\x6E\x67"))
+            map2
+    in
+    TestLabel "testDecodeMap"
+        (TestList [test1, test2, test3, test4, test5, test6, test7,
+            test8])
+
 testDecodeCompressedTerm :: Test
 testDecodeCompressedTerm =
     let test1 = TestCase $ assertEqual "decode compressed term 1"
-            (termError $ "\x83\x50")
+            (termError "\x83\x50")
             "ParseError \"not enough bytes\""
         test2 = TestCase $ assertEqual "decode compressed term 2"
-            (termError $ "\x83\x50\x00")
+            (termError "\x83\x50\x00")
             "ParseError \"not enough bytes\""
         test3 = TestCase $ assertEqual "decode compressed term 3"
-            (termError $ "\x83\x50\x00\x00")
+            (termError "\x83\x50\x00\x00")
             "ParseError \"not enough bytes\""
         test4 = TestCase $ assertEqual "decode compressed term 4"
-            (termError $ "\x83\x50\x00\x00\x00")
+            (termError "\x83\x50\x00\x00\x00")
             "ParseError \"not enough bytes\""
         test5 = TestCase $ assertEqual "decode compressed term 5"
-            (termError $ "\x83\x50\x00\x00\x00\x00")
+            (termError "\x83\x50\x00\x00\x00\x00")
             "ParseError \"compression corrupt\""
         test6 = TestCase $ assertEqual "decode compressed term 6"
-            (termError $
+            (termError
              ("\x83\x50\x00\x00\x00\x16" ++
               "\x78\xda\xcb\x66\x10\x49\xc1\x02\x00\x5d\x60\x08\x50"))
             "ParseError \"compression corrupt\""
         str = Erlang.OtpErlangString (bytes $ duplicate 20 "d")
         test7 = TestCase $ assertEqual "decode compressed term 7"
-            (termOk $
+            (termOk
              ("\x83\x50\x00\x00\x00\x17" ++
               "\x78\xda\xcb\x66\x10\x49\xc1\x02\x00\x5d\x60\x08\x50"))
             str
@@ -945,6 +994,31 @@ testEncodeFloat =
     in
     TestLabel "testEncodeFloat" (TestList [test1, test2, test3, test4, test5])
 
+testEncodeMap :: Test
+testEncodeMap =
+    let test1 = TestCase $ assertEqual "encode map 1"
+            (binaryOk $ Erlang.OtpErlangMap (Map.empty))
+            "\x83\x74\x00\x00\x00\x00"
+        map1 = Erlang.OtpErlangMap (Map.fromList [
+            (Erlang.OtpErlangAtom (bytes "a"), Erlang.OtpErlangInteger (1))])
+        test2 = TestCase $ assertEqual "encode map 2"
+            (binaryOk map1)
+            "\x83\x74\x00\x00\x00\x01\x73\x01\x61\x61\x01"
+        map2 = Erlang.OtpErlangMap (Map.fromList [
+            (Erlang.OtpErlangBinaryBits ((bytes "\xA8"), 6),
+             Erlang.OtpErlangBinary (bytes "everything")),
+            (Erlang.OtpErlangAtomUTF8 (bytes "undefined"),
+             Erlang.OtpErlangBinary (bytes "nothing"))])
+        test3 = TestCase $ assertEqual "encode map 3"
+            (binaryOk map2)
+            ("\x83\x74\x00\x00\x00\x02\x77\x09\x75\x6E\x64\x65\x66" ++
+             "\x69\x6E\x65\x64\x6D\x00\x00\x00\x07\x6E\x6F\x74\x68" ++
+             "\x69\x6E\x67\x4D\x00\x00\x00\x01\x06\xA8\x6D\x00\x00" ++
+             "\x00\x0A\x65\x76\x65\x72\x79\x74\x68\x69\x6E\x67")
+    in
+    TestLabel "testEncodeMap"
+        (TestList [test1, test2, test3])
+
 testEncodeCompressedTerm :: Test
 testEncodeCompressedTerm =
     let list = Erlang.OtpErlangList ([
@@ -1005,6 +1079,7 @@ main = do
         , testDecodeFloat
         , testDecodeSmallBigInteger
         , testDecodeLargeBigInteger
+        , testDecodeMap
         , testDecodeCompressedTerm
         , testEncodeTuple
         , testEncodeEmptyList
@@ -1022,6 +1097,7 @@ main = do
         , testEncodeSmallBigInteger
         , testEncodeLargeBigInteger
         , testEncodeFloat
+        , testEncodeMap
         , testEncodeCompressedTerm]
     if (errors results + failures results == 0) then
         exitWith ExitSuccess

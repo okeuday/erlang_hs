@@ -10,15 +10,6 @@ in a single Haskell cabal package.
 Build/Test
 ----------
 
-With cabal-install < 2.4
-
-    cabal sandbox init
-    cabal update
-    cabal install --enable-tests --only-dependencies --force-reinstalls
-    cabal configure --enable-tests -v2
-    cabal build
-    cabal test --show-details=always
-
 With cabal-install >= 2.4
 
     cabal v1-sandbox init
@@ -27,6 +18,15 @@ With cabal-install >= 2.4
     cabal v1-configure --enable-tests -v2
     cabal v1-build
     cabal v1-test --show-details=always
+
+With cabal-install < 2.4
+
+    cabal sandbox init
+    cabal update
+    cabal install --enable-tests --only-dependencies --force-reinstalls
+    cabal configure --enable-tests -v2
+    cabal build
+    cabal test --show-details=always
 
 Author
 ------
