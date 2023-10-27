@@ -1,5 +1,5 @@
 name:                erlang
-version:             2.0.6
+version:             2.0.7
 synopsis:            Erlang External Term Format for Haskell
 description:
   Provides all encoding and decoding for the Erlang Binary Term Format
@@ -25,7 +25,10 @@ tested-with:           GHC == 7.6.3
                      , GHC == 8.8.4
                      , GHC == 8.10.7
                      , GHC == 9.0.2
-                     , GHC == 9.2.4
+                     , GHC == 9.2.8
+                     , GHC == 9.4.7
+                     , GHC == 9.6.3
+                     , GHC == 9.8.1
 extra-source-files:  README.markdown
 
 flag dev
